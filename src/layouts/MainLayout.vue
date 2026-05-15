@@ -1,31 +1,52 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import SideNav from '@/components/ui/SideNav.vue'
-import TopBar  from '@/components/ui/TopBar.vue'
+import NavBar    from '@/components/ui/NavBar.vue'
 import BottomNav from '@/components/ui/BottomNav.vue'
-
-const route  = useRouter()
-const sidebarOpen = ref(false)
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex">
-    <!-- Sidebar (desktop) -->
-    <SideNav :open="sidebarOpen" @close="sidebarOpen = false" />
+  <div class="layout">
+    <NavBar />
 
-    <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0 lg:ml-64">
-      <!-- Top bar -->
-      <TopBar @toggle-sidebar="sidebarOpen = !sidebarOpen" />
-
-      <!-- Page content -->
-      <main class="flex-1 p-4 md:p-6 pb-20 lg:pb-6">
+    <main class="layout-content">
+      <div class="layout-inner">
         <RouterView />
-      </main>
-    </div>
+      </div>
+    </main>
 
-    <!-- Bottom nav (mobile) -->
-    <BottomNav class="lg:hidden" />
+    <BottomNav class="bottom-mobile" />
   </div>
 </template>
+
+<style scoped>
+.layout {
+  min-height: 100vh;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-inner {
+  flex: 1;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+
+.bottom-mobile { display: none; }
+
+@media (max-width: 1023px) {
+  .layout-inner  { padding: 20px 16px 90px; }
+  .bottom-mobile { display: flex; }
+}
+
+@media (max-width: 480px) {
+  .layout-inner { padding: 16px 12px 88px; }
+}
+</style>
