@@ -23,6 +23,7 @@ export interface ShoppingListDto {
   completed:    boolean
   items:        ShoppingListItemDto[]
   createdAt:    string
+  updatedAt?:    string
 }
 
 export interface ShoppingListItemStatusRequest {

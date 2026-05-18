@@ -3,10 +3,14 @@ import { ref, computed, onMounted } from 'vue'
 import { shoppingApi  }             from '@/api/shoppingList'
 import { mealPlansApi }             from '@/api/mealPlans'
 import { useAuthStore }             from '@/stores/authStore'
+import { useToast }                 from '@/composables/useToast'
+import { parseApiError }            from '@/utils/parseApiError'
 import { useRouter }                from 'vue-router'
+import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 
 const router     = useRouter()
 const auth       = useAuthStore()
+const toast      = useToast()
 const lists      = ref([])
 const plans      = ref([])
 const loading    = ref(true)
@@ -14,6 +18,7 @@ const generating = ref(false)
 const deleting   = ref(null)
 const selectedPlanId = ref('')
 const expanded   = ref(null)
+const confirmDel = ref({ show: false, id: null })
 
 onMounted(async () => {
   if (!auth.isAuthenticated) { router.push('/login'); return }
@@ -35,10 +40,18 @@ async function generate() {
   try {
     const res     = await shoppingApi.generate(selectedPlanId.value)
     const created = res.data?.data ?? res.data
-    lists.value.unshift(created)
+    // Agar shu reja uchun ro'yxat allaqachon mavjud bo'lsa, uni yangilaymiz
+    const existingIdx = lists.value.findIndex(l => l.mealPlanId === Number(selectedPlanId.value))
+    if (existingIdx !== -1) {
+      lists.value[existingIdx] = created
+      toast.success("Xarid ro'yxati yangilandi!")
+    } else {
+      lists.value.unshift(created)
+      toast.success("Xarid ro'yxati yaratildi!")
+    }
     selectedPlanId.value = ''
   } catch (e) {
-    alert(e.response?.data?.message || 'Xatolik yuz berdi')
+    toast.error(parseApiError(e, "Ro'yxat yaratishda xato"))
   } finally {
     generating.value = false
   }
@@ -52,13 +65,21 @@ async function toggleItem(listId, itemId, currentStatus) {
   if (idx !== -1) lists.value[idx] = updated
 }
 
-async function deleteList(id) {
-  if (!confirm("Ro'yxatni o'chirishni tasdiqlaysizmi?")) return
+function askDeleteList(id) {
+  confirmDel.value = { show: true, id }
+}
+
+async function doDeleteList() {
+  const id = confirmDel.value.id
+  confirmDel.value.show = false
   deleting.value = id
   try {
     await shoppingApi.delete(id)
     lists.value = lists.value.filter(l => l.id !== id)
     if (expanded.value === id) expanded.value = null
+    toast.success("Ro'yxat o'chirildi!")
+  } catch (e) {
+    toast.error(parseApiError(e, "O'chirishda xato"))
   } finally {
     deleting.value = null
   }
@@ -81,9 +102,43 @@ function groupItems(items) {
 }
 
 const selectedPlanName = computed(() => {
-  const p = plans.value.find(p => p.id === selectedPlanId.value)
+  const p = plans.value.find(p => p.id === Number(selectedPlanId.value))
   return p?.name ?? ''
 })
+
+const isRegenerating = computed(() =>
+  selectedPlanId.value !== '' &&
+  lists.value.some(l => l.mealPlanId === Number(selectedPlanId.value))
+)
+
+function planForList(list) {
+  if (!list.mealPlanId) return null
+  return plans.value.find(p => p.id === Number(list.mealPlanId)) ?? null
+}
+
+// plan.updatedAt > list.generatedAt → reja ro'yxat yaratilgandan keyin o'zgardi
+function isStale(list) {
+  if (!list.mealPlanId) return false
+  const plan = planForList(list)
+  if (!plan?.updatedAt) return false
+  if (!list.generatedAt) return true
+  return new Date(plan.updatedAt).getTime() > new Date(list.generatedAt).getTime()
+}
+
+async function regenerateForList(list) {
+  generating.value = true
+  try {
+    const res = await shoppingApi.generate(list.mealPlanId)
+    const updated = res.data?.data ?? res.data
+    const idx = lists.value.findIndex(l => l.id === list.id)
+    if (idx !== -1) lists.value[idx] = updated
+    toast.success("Xarid ro'yxati yangilandi!")
+  } catch (e) {
+    toast.error(parseApiError(e, "Yangilashda xato"))
+  } finally {
+    generating.value = false
+  }
+}
 </script>
 
 <template>
@@ -111,13 +166,15 @@ const selectedPlanName = computed(() => {
             {{ p.name }} ({{ p.weekStartDate }})
           </option>
         </select>
-        <button @click="generate" :disabled="!selectedPlanId || generating" class="btn-generate">
+        <button @click="generate" :disabled="!selectedPlanId || generating" class="btn-generate" :class="{ 'btn-regen': isRegenerating }">
           <span v-if="generating" class="spinner" />
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 4v16m8-8H4"/>
+          <svg v-else-if="isRegenerating" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
           </svg>
-          {{ generating ? 'Yaratilmoqda...' : "Ro'yxat yaratish" }}
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          {{ generating ? (isRegenerating ? 'Yangilanmoqda...' : 'Yaratilmoqda...') : isRegenerating ? "Ro'yxatni yangilash" : "Ro'yxat yaratish" }}
         </button>
       </div>
       <p v-if="!plans.length" class="gp-hint">
@@ -165,7 +222,22 @@ const selectedPlanName = computed(() => {
           </div>
 
           <div class="lh-actions" @click.stop>
-            <button @click="deleteList(list.id)" class="btn-del"
+            <!-- Yangilash tugmasi — faqat reja o'zgarganda -->
+            <button
+              v-if="isStale(list)"
+              @click="regenerateForList(list)"
+              :disabled="generating"
+              class="btn-refresh"
+              title="Reja o'zgardi — yangilash"
+            >
+              <span v-if="generating" class="spinner sm" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+            </button>
+
+            <button @click="askDeleteList(list.id)" class="btn-del"
               :disabled="deleting === list.id">
               <span v-if="deleting === list.id" class="spinner sm" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -224,6 +296,16 @@ const selectedPlanName = computed(() => {
       <p class="empty-title">Hali ro'yxat yo'q</p>
       <p class="empty-sub">Yuqoridan reja tanlang va avtomatik ro'yxat yarating</p>
     </div>
+
+    <!-- Confirm delete (v-if/v-else zanjiridan tashqarida) -->
+    <ConfirmModal
+      :show="confirmDel.show"
+      message="Xarid ro'yxatini o'chirmoqchimisiz?"
+      confirm-label="Ha, o'chirish"
+      danger
+      @confirm="doDeleteList"
+      @cancel="confirmDel.show = false"
+    />
 
   </div>
 </template>
@@ -291,6 +373,8 @@ const selectedPlanName = computed(() => {
 .btn-generate:hover:not(:disabled)  { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(216,90,48,0.4); }
 .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-generate svg { width: 16px; height: 16px; }
+.btn-regen { background: linear-gradient(135deg, #1d4ed8, #3b82f6); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+.btn-regen:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(59,130,246,0.4); }
 
 .gp-hint { width: 100%; font-size: 12px; color: #f59e0b; font-weight: 600; }
 
@@ -390,6 +474,28 @@ const selectedPlanName = computed(() => {
 }
 
 .lh-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.btn-refresh {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.08);
+  color: #60a5fa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+.btn-refresh:hover:not(:disabled) {
+  background: rgba(59,130,246,0.18);
+  border-color: rgba(59,130,246,0.6);
+}
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-refresh svg { width: 15px; height: 15px; }
+
+
 .btn-del {
   width: 32px;
   height: 32px;

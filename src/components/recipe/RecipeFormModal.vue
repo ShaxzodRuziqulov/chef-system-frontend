@@ -1,9 +1,9 @@
 <script setup>
 import { ref, watch, computed, nextTick } from 'vue'
-import { recipesApi }     from '@/api/recipes'
-import { categoriesApi }  from '@/api/categories'
-import { ingredientsApi } from '@/api/ingredients'
-import { uploadApi }      from '@/api/upload'
+import { recipesApi }              from '@/api/recipes'
+import { categoriesApi, tagsApi } from '@/api/categories'
+import { ingredientsApi }         from '@/api/ingredients'
+import { uploadApi }              from '@/api/upload'
 import { useLangStore }   from '@/stores/langStore'
 
 const lang = useLangStore()
@@ -18,8 +18,9 @@ const emit = defineEmits(['close', 'saved'])
 
 // ── State ─────────────────────────────────────────────────────────
 const saving     = ref(false)
-const activeTab  = ref('basic')   // basic | steps | ingredients | nutrition
+const activeTab  = ref('basic')
 const categories = ref([])
+const allTags    = ref([])
 const errorMsg   = ref('')
 
 // ── Form ──────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ function emptyForm() {
     servings:        4,
     imageUrl:        '',
     visible:         true,
+    tagIds:          [],
   }
 }
 
@@ -138,10 +140,11 @@ watch(() => props.visible, async (val) => {
   errorMsg.value = ''
   activeTab.value = 'basic'
 
-  // Load categories
+  // Load categories & tags
   try {
-    const c = await categoriesApi.getAll()
+    const [c, t] = await Promise.all([categoriesApi.getAll(), tagsApi.getAll()])
     categories.value = c.data?.data ?? c.data ?? []
+    allTags.value    = t.data?.data ?? t.data ?? []
   } catch {}
 
   if (props.recipe) {
@@ -158,6 +161,7 @@ watch(() => props.visible, async (val) => {
       servings:        r.servings        || 4,
       imageUrl:        r.imageUrl        || '',
       visible:         r.visible         ?? true,
+      tagIds:          (r.tags || []).map(t => t.id),
     }
     steps.value = (r.steps || []).map(s => ({
       stepNumber:      s.stepNumber,
@@ -305,26 +309,41 @@ async function save() {
 const imgError      = ref(false)
 const imgUploading  = ref(false)
 const fileInputRef  = ref(null)
+const stepFileRefs  = ref([])
+const stepUploading = ref([])
 
 watch(() => form.value.imageUrl, () => { imgError.value = false })
 
-function triggerFileInput() {
-  fileInputRef.value?.click()
-}
+function triggerFileInput() { fileInputRef.value?.click() }
 
 async function onFileSelected(e) {
   const file = e.target.files?.[0]
   if (!file) return
   imgUploading.value = true
-  imgError.value     = false
+  imgError.value = false
   try {
     const res = await uploadApi.image(file)
     form.value.imageUrl = res.data?.data?.url ?? res.data?.url ?? ''
   } catch (err) {
     errorMsg.value = err?.response?.data?.message || lang.t('common.error_save')
   } finally {
-    imgUploading.value  = false
-    e.target.value = '' // reset input
+    imgUploading.value = false
+    e.target.value = ''
+  }
+}
+
+async function onStepFileSelected(e, i) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  stepUploading.value[i] = true
+  try {
+    const res = await uploadApi.image(file)
+    steps.value[i].imageUrl = res.data?.data?.url ?? res.data?.url ?? ''
+  } catch (err) {
+    errorMsg.value = err?.response?.data?.message || lang.t('common.error_save')
+  } finally {
+    stepUploading.value[i] = false
+    e.target.value = ''
   }
 }
 </script>
@@ -425,6 +444,24 @@ async function onFileSelected(e) {
                   <label class="field-label">{{ lang.t('form.servings') }}</label>
                   <input v-model.number="form.servings" type="number" min="1" class="field-input" />
                 </div>
+                <!-- Tags -->
+                <div class="form-field span-2">
+                  <label class="field-label">Teglar</label>
+                  <div class="tags-wrap">
+                    <button
+                      v-for="tag in allTags"
+                      :key="tag.id"
+                      type="button"
+                      class="tag-pill"
+                      :class="{ 'tag-active': form.tagIds.includes(tag.id) }"
+                      @click="form.tagIds.includes(tag.id)
+                        ? form.tagIds.splice(form.tagIds.indexOf(tag.id), 1)
+                        : form.tagIds.push(tag.id)"
+                    ># {{ tag.nameUz }}</button>
+                    <span v-if="!allTags.length" class="tags-empty">Hali teg yo'q (Admin paneldan qo'shing)</span>
+                  </div>
+                </div>
+
                 <!-- Image upload -->
                 <div class="form-field span-2">
                   <label class="field-label">{{ lang.t('form.image') }}</label>
@@ -463,14 +500,6 @@ async function onFileSelected(e) {
                     </div>
                   </div>
 
-                  <!-- URL manual input -->
-                  <input
-                    v-model="form.imageUrl"
-                    class="field-input"
-                    :placeholder="lang.t('form.image_url')"
-                    style="margin-top:8px"
-                    @focus="imgError = false"
-                  />
                 </div>
                 <!-- Visible toggle -->
                 <div class="form-field span-2">
@@ -507,10 +536,28 @@ async function onFileSelected(e) {
                         :placeholder="lang.t('form.step_duration')"
                       />
                       <input
-                        v-model="step.imageUrl"
-                        class="field-input step-img-url"
-                        :placeholder="lang.t('form.step_image_url')"
+                        :ref="el => stepFileRefs[i] = el"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        style="display:none"
+                        @change="onStepFileSelected($event, i)"
                       />
+                      <button
+                        type="button"
+                        class="step-img-btn"
+                        :class="{ 'step-img-done': step.imageUrl }"
+                        @click="stepFileRefs[i]?.click()"
+                        :disabled="stepUploading[i]"
+                      >
+                        <span v-if="stepUploading[i]" class="upload-spin sm" />
+                        <svg v-else-if="step.imageUrl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01"/>
+                        </svg>
+                        {{ stepUploading[i] ? '...' : step.imageUrl ? 'Rasm yuklandi' : 'Rasm' }}
+                      </button>
                     </div>
                   </div>
                   <button class="step-del" @click="removeStep(i)">
@@ -775,6 +822,19 @@ async function onFileSelected(e) {
 }
 .field-select option { background: #1e293b; }
 
+/* ── Tags ── */
+.tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-pill {
+  padding: 5px 12px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: #64748b; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.tag-pill:hover { border-color: rgba(216,90,48,0.4); color: #E8713E; }
+.tag-active { background: rgba(216,90,48,0.15); border-color: rgba(216,90,48,0.4); color: #E8713E; }
+.tags-empty { font-size: 12px; color: #334155; }
+
 /* ── Difficulty pills ── */
 .diff-pills { display: flex; gap: 6px; flex-wrap: wrap; }
 .diff-pill {
@@ -868,7 +928,20 @@ async function onFileSelected(e) {
 .step-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .step-meta { display: flex; gap: 8px; }
 .step-dur { width: 120px; flex-shrink: 0; }
-.step-img-url { flex: 1; }
+.step-img-btn {
+  flex: 1; height: 40px; padding: 0 12px;
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.04);
+  border: 1px dashed rgba(255,255,255,0.12);
+  border-radius: 10px; color: #475569;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; white-space: nowrap;
+}
+.step-img-btn:hover:not(:disabled) { border-color: rgba(216,90,48,0.4); color: #E8713E; }
+.step-img-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+.step-img-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.step-img-done { border-style: solid; border-color: rgba(34,197,94,0.3); color: #4ade80; }
+.upload-spin.sm { width: 14px; height: 14px; border-width: 2px; }
 .step-del {
   width: 30px; height: 30px; border-radius: 8px;
   background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.15);
