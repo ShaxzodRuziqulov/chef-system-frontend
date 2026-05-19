@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import ToastContainer from '@/components/ui/ToastContainer.vue'
+import { onMounted }      from 'vue'
+import { useUnitsStore }  from '@/stores/unitsStore'
+import ToastContainer     from '@/components/ui/ToastContainer.vue'
+
+// O'lchov birliklarini bir marta yuklaydi (cached)
+onMounted(() => useUnitsStore().load())
 </script>
 
 <template>

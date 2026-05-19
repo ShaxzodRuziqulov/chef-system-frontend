@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { shoppingApi  }             from '@/api/shoppingList'
 import { mealPlansApi }             from '@/api/mealPlans'
 import { useAuthStore }             from '@/stores/authStore'
+import { useUnitsStore }            from '@/stores/unitsStore'
 import { useToast }                 from '@/composables/useToast'
 import { parseApiError }            from '@/utils/parseApiError'
 import { useRouter }                from 'vue-router'
@@ -10,6 +11,7 @@ import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 
 const router     = useRouter()
 const auth       = useAuthStore()
+const units      = useUnitsStore()
 const toast      = useToast()
 const lists      = ref([])
 const plans      = ref([])
@@ -275,10 +277,7 @@ async function regenerateForList(list) {
               <span class="item-name">{{ item.ingredientNameUz || item.ingredientNameRu }}</span>
 
               <!-- Amount -->
-              <span class="item-amount">
-                {{ item.amount }}
-                <span class="item-unit">{{ item.unit }}</span>
-              </span>
+              <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
             </div>
 
             <div v-if="!list.items?.length" class="items-empty">

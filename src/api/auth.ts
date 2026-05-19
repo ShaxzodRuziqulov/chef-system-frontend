@@ -40,6 +40,12 @@ export const authApi = {
   ): Promise<AxiosResponse<ApiResponse<AuthUserResponse>>> =>
     api.patch('/auth/profile', data),
 
+  /** Parol o'zgartirish */
+  changePassword: (
+    data: { currentPassword: string; newPassword: string },
+  ): Promise<AxiosResponse<void>> =>
+    api.patch('/auth/password', data),
+
   /** Chiqish */
   logout: (
     refreshToken: string,

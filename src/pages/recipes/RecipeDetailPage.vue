@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter }      from 'vue-router'
 import { useAuthStore }             from '@/stores/authStore'
 import { useLangStore }             from '@/stores/langStore'
+import { useUnitsStore }            from '@/stores/unitsStore'
 import { recipesApi }               from '@/api/recipes'
 import RecipeFormModal              from '@/components/recipe/RecipeFormModal.vue'
 
@@ -10,6 +11,7 @@ const route   = useRoute()
 const router  = useRouter()
 const auth    = useAuthStore()
 const lang    = useLangStore()
+const units   = useUnitsStore()
 const recipe  = ref(null)
 const loading = ref(true)
 const tab     = ref('ingredients')
@@ -181,7 +183,7 @@ onMounted(async () => {
         <div v-for="ing in recipe.ingredients" :key="ing.id" class="ingredient-row">
           <div class="ing-dot" />
           <span class="ing-name">{{ lang.ingName(ing) }}</span>
-          <span class="ing-amount">{{ ing.amount }} <span class="ing-unit">{{ ing.unit }}</span></span>
+          <span class="ing-amount">{{ units.formatAmount(ing.amount, ing.unit) }}</span>
         </div>
       </div>
       <div v-else class="tab-empty">

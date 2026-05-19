@@ -679,12 +679,18 @@ export const useLangStore = defineStore('lang', () => {
     return r.titleUz || r.titleRu || r.titleEng || ''
   }
 
-  /** Ingredient nomi — tanlangan tilga qarab */
+  /** Ingredient nomi — tanlangan tilga qarab
+   *  RecipeIngredientDto: ingredientNameUz / ingredientNameRu / ingredientNameEng
+   *  IngredientDto (search): nameUz / nameRu / nameEng
+   */
   function ingName(ing: any): string {
     if (!ing) return ''
-    if (lang.value === 'ru' && ing.ingredientNameRu)  return ing.ingredientNameRu
-    if (lang.value === 'en' && ing.ingredientNameEng) return ing.ingredientNameEng
-    return ing.ingredientNameUz || ing.ingredientNameRu || ''
+    const uz  = ing.ingredientNameUz  ?? ing.nameUz  ?? ''
+    const ru  = ing.ingredientNameRu  ?? ing.nameRu  ?? ''
+    const en  = ing.ingredientNameEng ?? ing.nameEng ?? ''
+    if (lang.value === 'ru' && ru)  return ru
+    if (lang.value === 'en' && en)  return en
+    return uz || ru || en || ''
   }
 
   /** Kategoriya nomi — tanlangan tilga qarab */

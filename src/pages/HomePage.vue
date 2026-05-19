@@ -7,9 +7,10 @@ import { useLangStore }  from '@/stores/langStore'
 
 const lang = useLangStore()
 
-const recipes    = ref([])
-const categories = ref([])
-const loading    = ref(true)
+const recipes       = ref([])
+const categories    = ref([])
+const totalRecipes  = ref(0)
+const loading       = ref(true)
 
 onMounted(async () => {
   try {
@@ -17,7 +18,9 @@ onMounted(async () => {
       recipesApi.getAll({ page: 0, size: 8 }),
       categoriesApi.getAll(),
     ])
-    recipes.value    = r.data?.data?.content ?? r.data?.content ?? []
+    const rData      = r.data?.data ?? r.data
+    recipes.value    = rData?.content ?? []
+    totalRecipes.value = rData?.totalElements ?? 0
     categories.value = c.data?.data ?? c.data ?? []
   } catch (e) {
     console.error('HomePage error:', e)
@@ -53,7 +56,7 @@ onMounted(async () => {
       <div class="stat-card">
         <span class="stat-icon">🍽️</span>
         <div>
-          <div class="stat-num">{{ recipes.length > 0 ? '1000+' : '—' }}</div>
+          <div class="stat-num">{{ totalRecipes > 0 ? totalRecipes.toLocaleString() : '—' }}</div>
           <div class="stat-label">{{ lang.t('home.stat_r') }}</div>
         </div>
       </div>

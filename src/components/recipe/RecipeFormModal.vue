@@ -5,8 +5,10 @@ import { categoriesApi, tagsApi } from '@/api/categories'
 import { ingredientsApi }         from '@/api/ingredients'
 import { uploadApi }              from '@/api/upload'
 import { useLangStore }   from '@/stores/langStore'
+import { useUnitsStore }  from '@/stores/unitsStore'
 
-const lang = useLangStore()
+const lang  = useLangStore()
+const units = useUnitsStore()
 
 // ── Props & Emits ─────────────────────────────────────────────────
 const props = defineProps({
@@ -66,20 +68,8 @@ const ingSearching       = ref(false)
 const ingSearchTimer     = ref(null)
 const activeIngRow       = ref(-1)   // which row is searching
 
-const UNITS = [
-  { value: 'GRAM',       label: 'gram'       },
-  { value: 'KILOGRAM',   label: 'kg'         },
-  { value: 'MILLILITER', label: 'ml'         },
-  { value: 'LITER',      label: 'litr'       },
-  { value: 'CUP',        label: 'stakan'     },
-  { value: 'TABLESPOON', label: 'osh qoshiq' },
-  { value: 'TEASPOON',   label: 'choy qoshiq'},
-  { value: 'PIECE',      label: 'dona'       },
-  { value: 'BUNCH',      label: 'bog\'lam'   },
-  { value: 'PINCH',      label: 'chimdim'    },
-  { value: 'SLICE',      label: 'bo\'lak'    },
-  { value: 'TO_TASTE',   label: 'ta\'mga qarab'},
-]
+// Backenddan keladigan birliklar ro'yxati (til o'zgarganda reaktiv)
+const UNITS = computed(() => units.selectOptions)
 
 function addIngredientLine() {
   ingredientLines.value.push({ ingredient: null, amount: '', unit: 'GRAM', notes: '' })
@@ -93,7 +83,8 @@ function removeIngredientLine(i) {
 }
 function openIngSearch(rowIdx) {
   activeIngRow.value = rowIdx
-  ingSearch.value = ingredientLines.value[rowIdx]?.ingredient?.nameUz || ''
+  const ing = ingredientLines.value[rowIdx]?.ingredient
+  ingSearch.value = ing ? (ing.ingredientNameUz || ing.nameUz || '') : ''
   ingResults.value = []
 }
 function doIngSearch() {
@@ -110,7 +101,14 @@ function doIngSearch() {
 }
 function selectIngredient(ing) {
   if (activeIngRow.value >= 0) {
-    ingredientLines.value[activeIngRow.value].ingredient = ing
+    // Search returns IngredientDto (nameUz/nameRu/nameEng)
+    // Normalize to unified shape that ingName() understands
+    ingredientLines.value[activeIngRow.value].ingredient = {
+      id:               ing.id,
+      ingredientNameUz: ing.nameUz  || ing.ingredientNameUz  || '',
+      ingredientNameRu: ing.nameRu  || ing.ingredientNameRu  || '',
+      ingredientNameEng:ing.nameEng || ing.ingredientNameEng || '',
+    }
   }
   ingResults.value = []
   ingSearch.value  = ''
@@ -170,10 +168,15 @@ watch(() => props.visible, async (val) => {
       imageUrl:        s.imageUrl        || '',
     }))
     ingredientLines.value = (r.ingredients || []).map(ri => ({
-      ingredient: { id: ri.ingredientId, nameUz: ri.ingredientNameUz || ri.ingredientNameRu || '' },
-      amount:     ri.amount,
-      unit:       ri.unit,
-      notes:      ri.notes || '',
+      ingredient: {
+        id:               ri.ingredientId,
+        ingredientNameUz: ri.ingredientNameUz || '',
+        ingredientNameRu: ri.ingredientNameRu || '',
+        ingredientNameEng:ri.ingredientNameEng || '',
+      },
+      amount: ri.amount,
+      unit:   ri.unit,
+      notes:  ri.notes || '',
     }))
     if (r.nutritionalInfo) {
       hasNutrition.value = true

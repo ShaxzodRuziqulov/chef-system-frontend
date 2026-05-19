@@ -4,13 +4,16 @@ import { useAuthStore }    from '@/stores/authStore'
 import { useLangStore }    from '@/stores/langStore'
 import { recipesApi }      from '@/api/recipes'
 import { uploadApi }       from '@/api/upload'
+import { mealPlansApi }    from '@/api/mealPlans'
+import { authApi }         from '@/api/auth'
 import RecipeCard          from '@/components/recipe/RecipeCard.vue'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
 
-const auth    = useAuthStore()
-const lang    = useLangStore()
-const recipes = ref([])
-const loading = ref(true)
+const auth          = useAuthStore()
+const lang          = useLangStore()
+const recipes       = ref([])
+const mealPlanCount = ref(0)
+const loading       = ref(true)
 
 // ── Profile edit modal ────────────────────────────────────────────
 const showEdit       = ref(false)
@@ -22,6 +25,13 @@ const avatarPreview   = ref('')       // yangi tanlangan rasm preview URL
 const avatarUploading = ref(false)   // rasm yuklanmoqda
 const avatarInput     = ref(null)    // hidden file input
 
+// ── Password change ───────────────────────────────────────────────
+const pwForm      = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
+const pwError     = ref('')
+const pwSuccess   = ref(false)
+const pwSaving    = ref(false)
+const showPwForm  = ref(false)
+
 // ── Recipe form modal ─────────────────────────────────────────────
 const showRecipeModal = ref(false)
 const editingRecipe   = ref(null)
@@ -30,7 +40,7 @@ const deletingId      = ref(null)
 onMounted(async () => {
   try {
     await auth.fetchUser()
-    await loadMyRecipes()
+    await Promise.all([loadMyRecipes(), loadMealPlanCount()])
   } finally {
     loading.value = false
   }
@@ -41,6 +51,14 @@ async function loadMyRecipes() {
   recipes.value = (r.data?.data ?? r.data)?.content ?? []
 }
 
+async function loadMealPlanCount() {
+  try {
+    const res = await mealPlansApi.getMy({ page: 0, size: 1 })
+    const data = res.data?.data ?? res.data
+    mealPlanCount.value = data?.totalElements ?? 0
+  } catch { mealPlanCount.value = 0 }
+}
+
 function openEdit() {
   editForm.value    = {
     fullName:  auth.user?.fullName  ?? '',
@@ -49,6 +67,10 @@ function openEdit() {
   avatarPreview.value  = auth.avatarUrl ?? ''
   saveError.value      = ''
   saveSuccess.value    = false
+  showPwForm.value     = false
+  pwForm.value         = { currentPassword: '', newPassword: '', confirmPassword: '' }
+  pwError.value        = ''
+  pwSuccess.value      = false
   showEdit.value       = true
 }
 
@@ -86,6 +108,33 @@ async function saveProfile() {
   } else {
     saveSuccess.value = true
     setTimeout(() => { showEdit.value = false; saveSuccess.value = false }, 1000)
+  }
+}
+
+async function savePassword() {
+  pwError.value   = ''
+  pwSuccess.value = false
+  if (pwForm.value.newPassword !== pwForm.value.confirmPassword) {
+    pwError.value = 'Yangi parollar mos kelmadi'
+    return
+  }
+  if (pwForm.value.newPassword.length < 6) {
+    pwError.value = 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak'
+    return
+  }
+  pwSaving.value = true
+  try {
+    await authApi.changePassword({
+      currentPassword: pwForm.value.currentPassword,
+      newPassword:     pwForm.value.newPassword,
+    })
+    pwSuccess.value = true
+    pwForm.value = { currentPassword: '', newPassword: '', confirmPassword: '' }
+    setTimeout(() => { pwSuccess.value = false }, 2000)
+  } catch (e) {
+    pwError.value = e?.response?.data?.message || 'Parol o\'zgartirishda xatolik'
+  } finally {
+    pwSaving.value = false
   }
 }
 
@@ -127,8 +176,7 @@ async function deleteRecipe(id) {
 
 const stats = [
   { icon: '📝', label: () => lang.t('profile.stat_recipes'), val: () => recipes.value.length },
-  { icon: '⭐', label: () => lang.t('profile.stat_saved'),   val: () => '—' },
-  { icon: '📅', label: () => lang.t('profile.stat_meal'),    val: () => '—' },
+  { icon: '📅', label: () => lang.t('profile.stat_meal'),    val: () => mealPlanCount.value },
 ]
 </script>
 
@@ -324,7 +372,36 @@ const stats = [
 
               <div v-if="saveError" class="modal-error">{{ saveError }}</div>
               <div v-if="saveSuccess" class="modal-success">✅ Muvaffaqiyatli saqlandi!</div>
-              <p class="modal-note">{{ lang.t('profile.note') }}</p>
+
+              <!-- Password change section -->
+              <div class="pw-section">
+                <button class="pw-toggle" @click="showPwForm = !showPwForm" type="button">
+                  🔒 Parolni o'zgartirish
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" :style="{ transform: showPwForm ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </button>
+                <div v-if="showPwForm" class="pw-form">
+                  <div class="form-group">
+                    <label class="form-label">Joriy parol</label>
+                    <input v-model="pwForm.currentPassword" type="password" class="form-input" placeholder="••••••" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Yangi parol</label>
+                    <input v-model="pwForm.newPassword" type="password" class="form-input" placeholder="••••••" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Yangi parolni tasdiqlang</label>
+                    <input v-model="pwForm.confirmPassword" type="password" class="form-input" placeholder="••••••" />
+                  </div>
+                  <div v-if="pwError" class="modal-error">{{ pwError }}</div>
+                  <div v-if="pwSuccess" class="modal-success">✅ Parol muvaffaqiyatli o'zgartirildi!</div>
+                  <button @click="savePassword" class="btn-save-pw" :disabled="pwSaving" type="button">
+                    <span v-if="pwSaving" class="btn-spinner"></span>
+                    <span>{{ pwSaving ? 'Saqlanmoqda...' : 'Parolni saqlash' }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
               <div class="modal-footer">
                 <button @click="showEdit = false" class="btn-ghost" :disabled="saving">
@@ -762,14 +839,55 @@ const stats = [
 }
 .form-input:focus { border-color: rgba(216,90,48,0.5); }
 
-.modal-note {
-  font-size: 12px;
-  color: #475569;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 10px;
-  padding: 10px 12px;
+/* Password section */
+.pw-section {
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  overflow: hidden;
 }
+.pw-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  background: rgba(255,255,255,0.03);
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  text-align: left;
+}
+.pw-toggle:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.pw-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
+.pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.btn-save-pw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 12px;
+  color: #60a5fa;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  align-self: flex-start;
+}
+.btn-save-pw:hover:not(:disabled) { background: rgba(59,130,246,0.25); }
+.btn-save-pw:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .modal-error {
   font-size: 12px;
