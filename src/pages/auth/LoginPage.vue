@@ -31,7 +31,7 @@ const rememberMe   = ref(false)
 
 const onSubmit = handleSubmit(async (values) => {
   serverError.value = null
-  const error = await auth.login({ username: values.username, password: values.password })
+  const error = await auth.login({ username: values.username, password: values.password }, redirectPath.value)
   if (error) serverError.value = error
 })
 

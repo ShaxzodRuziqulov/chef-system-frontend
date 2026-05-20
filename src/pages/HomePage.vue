@@ -41,11 +41,11 @@ onMounted(async () => {
         <h1 class="hero-title" v-html="lang.t('home.title').replace('\n','<br>')"></h1>
         <p class="hero-sub">{{ lang.t('home.sub') }}</p>
         <div class="hero-actions">
-          <RouterLink to="/recipes" class="btn-primary">
+          <RouterLink to="/app/recipes" class="btn-primary">
             {{ lang.t('home.btn_browse') }}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
           </RouterLink>
-          <RouterLink to="/meal-plans" class="btn-ghost">{{ lang.t('home.btn_meal') }}</RouterLink>
+          <RouterLink to="/app/meal-plans" class="btn-ghost">{{ lang.t('home.btn_meal') }}</RouterLink>
         </div>
       </div>
       <div class="hero-emoji">🍲</div>
@@ -97,7 +97,7 @@ onMounted(async () => {
         <RouterLink
           v-for="cat in categories"
           :key="cat.id"
-          :to="`/recipes?category=${cat.id}`"
+          :to="`/app/recipes?category=${cat.id}`"
           class="cat-item"
         >
           <span class="cat-icon">
@@ -117,7 +117,7 @@ onMounted(async () => {
     <section class="section">
       <div class="section-header">
         <h2 class="section-title">{{ lang.t('home.popular') }}</h2>
-        <RouterLink to="/recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
+        <RouterLink to="/app/recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
       </div>
 
       <div v-if="loading" class="recipe-grid">

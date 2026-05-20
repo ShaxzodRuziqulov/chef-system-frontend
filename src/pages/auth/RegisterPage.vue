@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted }    from 'vue'
-import { useForm, useField } from 'vee-validate'
-import * as yup              from 'yup'
-import { useAuthStore }      from '@/stores/authStore'
-import { useLangStore }      from '@/stores/langStore'
+import { ref, computed, onMounted } from 'vue'
+import { useForm, useField }        from 'vee-validate'
+import * as yup                     from 'yup'
+import { useAuthStore }             from '@/stores/authStore'
+import { useRoute }                 from 'vue-router'
+import { useLangStore }             from '@/stores/langStore'
 
-const auth = useAuthStore()
-const lang = useLangStore()
+const auth  = useAuthStore()
+const route = useRoute()
+const lang  = useLangStore()
+
+const redirectPath = computed(() =>
+  typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+)
 
 const schema = yup.object({
   fullName: yup.string().optional().max(80, 'Ism juda uzun'),
@@ -32,7 +38,7 @@ const onSubmit = handleSubmit(async (values) => {
     username: values.username,
     email:    values.email,
     password: values.password,
-  })
+  }, redirectPath.value)
   if (error) serverError.value = error
 })
 

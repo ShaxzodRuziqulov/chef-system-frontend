@@ -30,7 +30,7 @@ async function deleteRecipe() {
   deleting.value = true
   try {
     await recipesApi.delete(recipe.value.id)
-    router.push('/recipes')
+    router.push('/app/recipes')
   } catch {
     alert(lang.t('common.error_delete'))
   } finally {
@@ -56,7 +56,7 @@ onMounted(async () => {
     const res = await recipesApi.getById(route.params.id)
     recipe.value = res.data?.data ?? res.data
   } catch {
-    router.push('/recipes')
+    router.push('/app/recipes')
   } finally {
     loading.value = false
   }

@@ -1,12 +1,16 @@
 <script setup>
-import { computed }      from 'vue'
-import { useLangStore }  from '@/stores/langStore'
+import { computed }           from 'vue'
+import { useLangStore }       from '@/stores/langStore'
+import { useFavoritesStore }  from '@/stores/favoritesStore'
+import { useAuthStore }       from '@/stores/authStore'
 
 const props = defineProps({
   recipe: { type: Object, required: true },
 })
 
-const lang = useLangStore()
+const lang      = useLangStore()
+const favorites = useFavoritesStore()
+const auth      = useAuthStore()
 
 const title = computed(() => lang.recipeTitle(props.recipe))
 
@@ -15,10 +19,19 @@ const diffMap = computed(() => ({
   MEDIUM: { label: lang.t('common.medium'), cls: 'diff-medium' },
   HARD:   { label: lang.t('common.hard'),   cls: 'diff-hard'   },
 }))
+
+const isFav = computed(() => favorites.isFavorited(props.recipe.id))
+
+function toggleFav(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!auth.isAuthenticated) return
+  favorites.toggle(props.recipe.id)
+}
 </script>
 
 <template>
-  <RouterLink :to="`/recipes/${recipe.id}`" class="recipe-card">
+  <RouterLink :to="`/app/recipes/${recipe.id}`" class="recipe-card">
     <!-- Image -->
     <div class="card-img">
       <img v-if="recipe.imageUrl" :src="recipe.imageUrl" :alt="title" loading="lazy" />
@@ -28,6 +41,20 @@ const diffMap = computed(() => ({
         {{ diffMap[recipe.difficultyLevel]?.label }}
       </span>
       <span v-if="recipe.categoryNameUz" class="badge-cat">{{ recipe.categoryNameUz }}</span>
+
+      <!-- Heart button -->
+      <button
+        v-if="auth.isAuthenticated"
+        class="fav-btn"
+        :class="{ 'fav-active': isFav }"
+        @click="toggleFav"
+        :title="isFav ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish'"
+      >
+        <svg viewBox="0 0 24 24" :fill="isFav ? 'currentColor' : 'none'" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Body -->
@@ -116,6 +143,42 @@ const diffMap = computed(() => ({
   color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(4px);
 }
+
+/* ── Heart button ── */
+.fav-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+  z-index: 2;
+}
+.fav-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+  color: #ef4444;
+  transform: scale(1.12);
+}
+.fav-btn.fav-active {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.18);
+}
+.fav-btn.fav-active:hover { background: rgba(239, 68, 68, 0.28); }
+.fav-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s;
+}
+.fav-btn:active svg { transform: scale(0.85); }
 
 /* Body */
 .card-body {

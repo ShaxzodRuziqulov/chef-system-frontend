@@ -6,8 +6,10 @@ import { useUnitsStore }   from '@/stores/unitsStore'
 import { recipesApi }      from '@/api/recipes'
 import { categoriesApi, tagsApi } from '@/api/categories'
 import { ingredientsApi }  from '@/api/ingredients'
+import { uploadApi }       from '@/api/upload'
 import { useRouter }       from 'vue-router'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
+import ImgUpload           from '@/components/ui/ImgUpload.vue'
 import { useToast }        from '@/composables/useToast'
 
 const router = useRouter()
@@ -18,9 +20,9 @@ const toast  = useToast()
 
 // ── Guard ─────────────────────────────────────────────────────────
 onMounted(async () => {
-  if (!auth.isAuthenticated) { router.push('/login'); return }
-  if (!auth.isAdmin)         { router.push('/'); return }
-  await Promise.all([loadRecipes(), loadCategories(), loadTags()])
+  if (!auth.isAuthenticated) { router.push({ name: 'Login' }); return }
+  if (!auth.isAdmin)         { router.push({ name: 'Home' }); return }
+  await Promise.all([loadRecipes(), loadCategories(), loadTags(), units.load()])
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────
@@ -197,18 +199,25 @@ async function deleteTag(id) {
 }
 
 // ── API: Ingredients ──────────────────────────────────────────────
-const ingredients = ref([])
-const ingTotal    = ref(0)
-const ingPage     = ref(0)
-const ingPageSize = 20
-const ingSearch   = ref('')
-const ingForm     = ref(emptyIngForm())
-const ingEditing  = ref(null)
-const ingSaving   = ref(false)
-const ingLoading  = ref(false)
+const ingredients    = ref([])
+const ingTotal       = ref(0)
+const ingPage        = ref(0)
+const ingPageSize    = 20
+const ingSearch      = ref('')
+const ingForm        = ref(emptyIngForm())
+const ingEditing     = ref(null)
+const ingSaving      = ref(false)
+const ingLoading     = ref(false)
+const ingModalVisible = ref(false)
 
 function emptyIngForm() {
   return { nameUz: '', nameRu: '', nameEng: '', imageUrl: '', defaultUnit: '', allergen: false }
+}
+
+function openAddIng() {
+  ingEditing.value = null
+  ingForm.value = emptyIngForm()
+  ingModalVisible.value = true
 }
 
 async function loadIngredients() {
@@ -230,9 +239,14 @@ async function loadIngredients() {
 function editIng(i) {
   ingEditing.value = i
   ingForm.value = { nameUz: i.nameUz || '', nameRu: i.nameRu || '', nameEng: i.nameEng || '', imageUrl: i.imageUrl || '', defaultUnit: i.defaultUnit || '', allergen: i.allergen || false }
+  ingModalVisible.value = true
 }
 
-function cancelIng() { ingEditing.value = null; ingForm.value = emptyIngForm() }
+function cancelIng() {
+  ingModalVisible.value = false
+  ingEditing.value = null
+  ingForm.value = emptyIngForm()
+}
 
 async function saveIng() {
   if (!ingForm.value.nameUz.trim()) return
@@ -261,7 +275,7 @@ async function saveIng() {
     }
     cancelIng()
   } catch (e) {
-    toast.error(e?.response?.data?.message || "Xatolik")
+    toast.error(e?.response?.data?.message || "Saqlashda xatolik yuz berdi")
   } finally { ingSaving.value = false }
 }
 
@@ -284,7 +298,7 @@ function onIngSearch() {
 
 // Backenddan keladigan birliklar (til o'zgarganda reaktiv)
 const UNITS     = computed(() => units.units.map(u => u.value))
-const unitLabel = (key: string) => units.label(key)
+const unitLabel = (key) => units.label(key)
 
 const diffLabel = computed(() => ({ EASY: lang.t('common.easy'), MEDIUM: lang.t('common.medium'), HARD: lang.t('common.hard') }))
 const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
@@ -371,7 +385,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
           <div class="row-id">#{{ r.id }}</div>
           <div :class="r.visible ? 'vis-on' : 'vis-off'">{{ r.visible ? ('✓ ' + lang.t('common.visible')) : ('✗ ' + lang.t('common.hidden')) }}</div>
           <div class="row-actions">
-            <RouterLink :to="`/recipes/${r.id}`" class="btn-view">
+            <RouterLink :to="`/app/recipes/${r.id}`" class="btn-view">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
             </RouterLink>
             <button @click="openEditRecipe(r)" class="btn-edit-row">
@@ -407,7 +421,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <input v-model="catForm.colorCode" type="color" class="cf-color-input" />
             <span class="cf-color-val">{{ catForm.colorCode }}</span>
           </div>
-          <input v-model="catForm.iconUrl"   class="cf-input" placeholder="Ikonka URL (ixtiyoriy)" />
+          <ImgUpload v-model="catForm.iconUrl" size="sm" placeholder="Ikonka rasmini yuklang" />
         </div>
         <div class="crud-form-actions">
           <button v-if="catEditing" @click="cancelCat" class="btn-cancel-sm">Bekor</button>
@@ -482,86 +496,130 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
     </div>
 
     <!-- ══ INGREDIENTS ══ -->
-    <div v-show="activeTab === 'ingredients'" class="crud-section">
+    <div v-show="activeTab === 'ingredients'">
 
-      <!-- Form -->
-      <div class="crud-form">
-        <h3 class="crud-form-title">{{ ingEditing ? 'Ingredientni tahrirlash' : 'Yangi ingredient' }}</h3>
-        <div class="crud-fields">
-          <input v-model="ingForm.nameUz"  class="cf-input" placeholder="Nom (UZ) *" />
-          <input v-model="ingForm.nameRu"  class="cf-input" placeholder="Nom (RU)" />
-          <input v-model="ingForm.nameEng" class="cf-input" placeholder="Nom (EN)" />
-          <input v-model="ingForm.imageUrl" class="cf-input" placeholder="Rasm URL (ixtiyoriy)" />
-          <select v-model="ingForm.defaultUnit" class="cf-input cf-select">
-            <option value="">O'lchov birligini tanlang</option>
-            <option v-for="u in UNITS" :key="u" :value="u">{{ unitLabel(u) }} ({{ u }})</option>
-          </select>
-          <label class="cf-check-row">
-            <input type="checkbox" v-model="ingForm.allergen" class="cf-check" />
-            <span>Allergik ingredient</span>
-          </label>
+      <!-- Toolbar: search + add button -->
+      <div class="list-toolbar">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
+          <input v-model="ingSearch" @input="onIngSearch" type="text" placeholder="Ingredient qidirish..." />
+          <button v-if="ingSearch" @click="ingSearch=''; ingPage=0; loadIngredients()" class="clear-btn">✕</button>
         </div>
-        <div class="crud-form-actions">
-          <button v-if="ingEditing" @click="cancelIng" class="btn-cancel-sm">Bekor</button>
-          <button @click="saveIng" :disabled="ingSaving || !ingForm.nameUz.trim()" class="btn-save-sm">
-            <span v-if="ingSaving" class="spinner sm" />
-            {{ ingEditing ? 'Saqlash' : "Qo'shish" }}
-          </button>
-        </div>
+        <span class="result-count">{{ ingTotal }} ta</span>
+        <button @click="openAddIng" class="btn-add-new">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/></svg>
+          Ingredient qo'shish
+        </button>
       </div>
 
       <!-- List -->
-      <div class="ing-right">
-        <div class="list-toolbar" style="margin-bottom:12px">
-          <div class="search-wrap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
-            <input v-model="ingSearch" @input="onIngSearch" type="text" placeholder="Ingredient qidirish..." />
-            <button v-if="ingSearch" @click="ingSearch=''; ingPage=0; loadIngredients()" class="clear-btn">✕</button>
-          </div>
-          <span class="result-count">{{ ingTotal }} ta</span>
-        </div>
-
-        <div v-if="ingLoading" class="crud-list">
-          <div v-for="i in 6" :key="i" class="crud-row skel-row">
-            <div class="skel-img" style="width:36px;height:36px;border-radius:8px;flex-shrink:0" />
-            <div class="skel-body"><div class="skel-line w70" /></div>
-          </div>
-        </div>
-        <div v-else-if="ingredients.length" class="crud-list">
-          <div v-for="ing in ingredients" :key="ing.id" class="crud-row">
-            <div class="ing-img-wrap">
-              <img v-if="ing.imageUrl" :src="ing.imageUrl" :alt="ing.nameUz" />
-              <span v-else>🥦</span>
-            </div>
-            <div class="crud-info">
-              <span class="crud-name">{{ ing.nameUz }}</span>
-              <span v-if="ing.nameRu" class="crud-sub">{{ ing.nameRu }}</span>
-              <span v-if="ing.defaultUnit" class="ing-unit">{{ unitLabel(ing.defaultUnit) }}</span>
-              <span v-if="ing.allergen" class="ing-allergen">⚠️ Allergik</span>
-            </div>
-            <div class="crud-actions">
-              <button @click="editIng(ing)" class="btn-edit-row">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-              </button>
-              <button @click="deleteIng(ing.id)" class="btn-delete" :disabled="deleting === 'ing-'+ing.id">
-                <span v-if="deleting === 'ing-'+ing.id" class="spinner" />
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div v-else class="crud-empty">
-          {{ ingSearch ? 'Natija topilmadi' : 'Hali ingredient yo\'q' }}
-        </div>
-
-        <!-- Pagination -->
-        <div v-if="ingTotal > ingPageSize" class="ing-pagination">
-          <button :disabled="ingPage === 0" @click="ingPage--; loadIngredients()" class="pg-btn">‹ Oldingi</button>
-          <span class="pg-info">{{ ingPage + 1 }} / {{ Math.ceil(ingTotal / ingPageSize) }}</span>
-          <button :disabled="(ingPage + 1) * ingPageSize >= ingTotal" @click="ingPage++; loadIngredients()" class="pg-btn">Keyingi ›</button>
+      <div v-if="ingLoading" class="recipe-table">
+        <div v-for="i in 6" :key="i" class="crud-row skel-row">
+          <div class="skel-img" style="width:40px;height:40px;border-radius:10px;flex-shrink:0" />
+          <div class="skel-body"><div class="skel-line w70" /><div class="skel-line w40" /></div>
         </div>
       </div>
+      <div v-else-if="ingredients.length" class="recipe-table">
+        <div v-for="ing in ingredients" :key="ing.id" class="crud-row">
+          <div class="ing-img-wrap">
+            <img v-if="ing.imageUrl" :src="ing.imageUrl" :alt="ing.nameUz" />
+            <span v-else>🥦</span>
+          </div>
+          <div class="crud-info">
+            <span class="crud-name">{{ ing.nameUz }}</span>
+            <span v-if="ing.nameRu" class="crud-sub">{{ ing.nameRu }}</span>
+          </div>
+          <div class="ing-badges">
+            <span v-if="ing.defaultUnit" class="ing-unit-badge">{{ unitLabel(ing.defaultUnit) }}</span>
+            <span v-if="ing.allergen" class="ing-allergen">⚠️ Allergik</span>
+          </div>
+          <div class="crud-actions">
+            <button @click="editIng(ing)" class="btn-edit-row">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </button>
+            <button @click="deleteIng(ing.id)" class="btn-delete" :disabled="deleting === 'ing-'+ing.id">
+              <span v-if="deleting === 'ing-'+ing.id" class="spinner" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-state">
+        <div class="empty-icon">🥕</div>
+        <p class="empty-title">{{ ingSearch ? 'Natija topilmadi' : "Hali ingredient yo'q" }}</p>
+        <button v-if="ingSearch" @click="ingSearch=''; ingPage=0; loadIngredients()" class="empty-btn">Tozalash</button>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="ingTotal > ingPageSize" class="ing-pagination">
+        <button :disabled="ingPage === 0" @click="ingPage--; loadIngredients()" class="pg-btn">‹ Oldingi</button>
+        <span class="pg-info">{{ ingPage + 1 }} / {{ Math.ceil(ingTotal / ingPageSize) }}</span>
+        <button :disabled="(ingPage + 1) * ingPageSize >= ingTotal" @click="ingPage++; loadIngredients()" class="pg-btn">Keyingi ›</button>
+      </div>
     </div>
+
+    <!-- ══ INGREDIENT MODAL ══ -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="ingModalVisible" class="ing-modal-overlay" @click.self="cancelIng">
+          <div class="ing-modal">
+            <div class="ing-modal-head">
+              <div class="ing-modal-icon">{{ ingEditing ? '✏️' : '🥕' }}</div>
+              <div>
+                <h3 class="ing-modal-title">{{ ingEditing ? 'Ingredientni tahrirlash' : "Yangi ingredient qo'shish" }}</h3>
+                <p class="ing-modal-sub">{{ ingEditing ? ingEditing.nameUz : "Ma'lumotlarni kiriting" }}</p>
+              </div>
+              <button class="ing-modal-close" @click="cancelIng">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div class="ing-modal-body">
+              <div class="ing-modal-fields">
+                <div class="imf-group">
+                  <label class="imf-label">Nom (O'zbek) <span class="imf-req">*</span></label>
+                  <input v-model="ingForm.nameUz" class="imf-input" placeholder="Masalan: Sabzi" autofocus />
+                </div>
+                <div class="imf-group">
+                  <label class="imf-label">Nom (Rus)</label>
+                  <input v-model="ingForm.nameRu" class="imf-input" placeholder="Морковь" />
+                </div>
+                <div class="imf-group">
+                  <label class="imf-label">Nom (Ingliz)</label>
+                  <input v-model="ingForm.nameEng" class="imf-input" placeholder="Carrot" />
+                </div>
+                <div class="imf-group">
+                  <label class="imf-label">Rasm</label>
+                  <ImgUpload v-model="ingForm.imageUrl" size="md" placeholder="Ingredient rasmini yuklash uchun bosing" />
+                </div>
+                <div class="imf-group">
+                  <label class="imf-label">Standart o'lchov</label>
+                  <select v-model="ingForm.defaultUnit" class="imf-input imf-select">
+                    <option value="">Tanlang</option>
+                    <option v-for="u in UNITS" :key="u" :value="u">{{ unitLabel(u) }}</option>
+                  </select>
+                </div>
+                <label class="imf-check-row">
+                  <div class="imf-toggle" :class="{ 'imf-toggle-on': ingForm.allergen }" @click="ingForm.allergen = !ingForm.allergen">
+                    <div class="imf-toggle-thumb" />
+                  </div>
+                  <span class="imf-check-label">⚠️ Allergik ingredient</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="ing-modal-footer">
+              <button class="ing-modal-cancel" @click="cancelIng">Bekor qilish</button>
+              <button class="ing-modal-save" @click="saveIng" :disabled="ingSaving || !ingForm.nameUz.trim()">
+                <span v-if="ingSaving" class="spinner sm" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                {{ ingEditing ? 'Saqlash' : "Qo'shish" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal" @close="showRecipeModal=false" @saved="handleRecipeSaved" />
   </div>
@@ -622,10 +680,10 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
 .vis-off   { padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; background: rgba(100,116,139,0.1); color: #64748b; flex-shrink: 0; }
 .row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-/* CRUD section */
+/* CRUD section (categories / tags still use split layout) */
 .crud-section { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
 
-/* Form */
+/* Form panel */
 .crud-form { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .crud-form-title { font-size: 14px; font-weight: 800; color: #e2e8f0; }
 .crud-fields { display: flex; flex-direction: column; gap: 8px; }
@@ -633,7 +691,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
   height: 40px; padding: 0 12px;
   background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px; color: #e2e8f0; font-size: 14px; outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s; width: 100%;
 }
 .cf-input:focus { border-color: rgba(216,90,48,0.5); }
 .cf-input::placeholder { color: #334155; }
@@ -698,20 +756,116 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
 .empty-title { font-size: 15px; font-weight: 800; color: #64748b; }
 .empty-btn   { padding: 8px 18px; border-radius: 10px; background: rgba(216,90,48,0.1); border: 1px solid rgba(216,90,48,0.2); color: #E8713E; font-size: 13px; font-weight: 700; cursor: pointer; }
 
-/* Ingredient tab extras */
-.ing-right { display: flex; flex-direction: column; gap: 0; }
-.ing-img-wrap { width: 36px; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
+/* Ingredient list extras */
+.ing-img-wrap { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 20px; overflow: hidden; flex-shrink: 0; }
 .ing-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
-.ing-unit { padding: 2px 7px; border-radius: 6px; background: rgba(99,102,241,0.1); color: #818cf8; font-size: 10px; font-weight: 700; }
-.ing-allergen { font-size: 10px; color: #fbbf24; font-weight: 700; }
-.cf-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
-.cf-check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #94a3b8; cursor: pointer; }
-.cf-check { width: 16px; height: 16px; accent-color: #E8713E; cursor: pointer; }
+.ing-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ing-unit-badge { padding: 2px 8px; border-radius: 6px; background: rgba(99,102,241,0.12); color: #818cf8; font-size: 10px; font-weight: 800; }
+.ing-allergen { font-size: 11px; color: #fbbf24; font-weight: 700; }
 .ing-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
 .pg-btn { padding: 6px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #94a3b8; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
 .pg-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #e2e8f0; }
 .pg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .pg-info { font-size: 12px; color: #475569; font-weight: 700; }
+
+/* ── Ingredient Modal ── */
+.ing-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.ing-modal {
+  width: 100%; max-width: 480px;
+  background: #131f38;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.ing-modal-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.ing-modal-icon { font-size: 28px; flex-shrink: 0; }
+.ing-modal-title { font-size: 16px; font-weight: 900; color: #f1f5f9; }
+.ing-modal-sub { font-size: 12px; color: #475569; margin-top: 2px; }
+.ing-modal-close {
+  margin-left: auto; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,0.05); border: none;
+  color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.ing-modal-close:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+.ing-modal-close svg { width: 16px; height: 16px; }
+
+.ing-modal-body { padding: 20px 24px; }
+.ing-modal-fields { display: flex; flex-direction: column; gap: 12px; }
+.imf-group { display: flex; flex-direction: column; gap: 5px; }
+.imf-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+.imf-req { color: #ef4444; }
+.imf-input {
+  height: 42px; padding: 0 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: #e2e8f0; font-size: 14px; outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.imf-input:focus { border-color: rgba(216,90,48,0.5); background: rgba(255,255,255,0.07); }
+.imf-input::placeholder { color: #334155; }
+.imf-select { cursor: pointer; color-scheme: dark; }
+.imf-select option { background: #1a2744; color: #e2e8f0; }
+.imf-check-row {
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; padding: 4px 0;
+}
+.imf-toggle {
+  width: 36px; height: 20px; border-radius: 10px;
+  background: rgba(255,255,255,0.1); position: relative;
+  transition: background 0.2s; flex-shrink: 0; cursor: pointer;
+}
+.imf-toggle-on { background: #E8713E; }
+.imf-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: white;
+  transition: transform 0.2s;
+}
+.imf-toggle-on .imf-toggle-thumb { transform: translateX(16px); }
+.imf-check-label { font-size: 13px; color: #94a3b8; font-weight: 600; }
+
+.ing-modal-footer {
+  display: flex; gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.ing-modal-cancel {
+  flex: 1; height: 42px; border-radius: 11px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  color: #64748b; font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background 0.2s;
+}
+.ing-modal-cancel:hover { background: rgba(255,255,255,0.1); color: #94a3b8; }
+.ing-modal-save {
+  flex: 2; height: 42px; border-radius: 11px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: none; color: white; font-size: 14px; font-weight: 800;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+  box-shadow: 0 4px 14px rgba(216,90,48,0.35);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.ing-modal-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(216,90,48,0.45); }
+.ing-modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.ing-modal-save svg { width: 16px; height: 16px; }
+
+/* modal-fade transition */
+.modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+.modal-fade-leave-active { transition: all 0.2s ease; }
+.modal-fade-enter-from  { opacity: 0; }
+.modal-fade-leave-to    { opacity: 0; }
+.modal-fade-enter-from .ing-modal { transform: scale(0.95) translateY(10px); }
+.modal-fade-leave-to   .ing-modal { transform: scale(0.95) translateY(10px); }
 
 /* Spinner */
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.25); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; flex-shrink: 0; }
@@ -723,5 +877,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
 @media (max-width: 768px) {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .crud-section { grid-template-columns: 1fr; }
+  .ing-modal { max-width: 100%; border-radius: 16px 16px 0 0; }
+  .ing-modal-overlay { align-items: flex-end; padding: 0; }
 }
 </style>

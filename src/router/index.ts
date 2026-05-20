@@ -12,6 +12,14 @@ declare module 'vue-router' {
 }
 
 const routes: RouteRecordRaw[] = [
+  // ── Landing (public) ────────────────────────────────────────────
+  {
+    path:      '/',
+    name:      'Landing',
+    component: () => import('@/pages/LandingPage.vue'),
+    meta:      { guestOnly: true, title: 'OshPaz — Ovqatlar dunyosi' },
+  },
+
   // ── Auth ────────────────────────────────────────────────────────
   {
     path:      '/login',
@@ -28,26 +36,26 @@ const routes: RouteRecordRaw[] = [
 
   // ── Asosiy sahifalar (MainLayout ichida) ────────────────────────
   {
-    path:      '/',
+    path:      '/app',
     component: () => import('@/layouts/MainLayout.vue'),
     children:  [
       {
         path:      '',
         name:      'Home',
         component: () => import('@/pages/HomePage.vue'),
-        meta:      { title: 'Asosiy' },
+        meta:      { requiresAuth: true, title: 'Asosiy' },
       },
       {
         path:      'recipes',
         name:      'Recipes',
         component: () => import('@/pages/recipes/RecipesPage.vue'),
-        meta:      { title: 'Retseptlar' },
+        meta:      { requiresAuth: true, title: 'Retseptlar' },
       },
       {
         path:      'recipes/:id',
         name:      'RecipeDetail',
         component: () => import('@/pages/recipes/RecipeDetailPage.vue'),
-        meta:      { title: 'Retsept' },
+        meta:      { requiresAuth: true, title: 'Retsept' },
       },
       {
         path:         'meal-plans',
@@ -60,6 +68,12 @@ const routes: RouteRecordRaw[] = [
         name:         'ShoppingLists',
         component:    () => import('@/pages/shopping/ShoppingListPage.vue'),
         meta:         { requiresAuth: true, title: 'Xarid ro\'yxati' },
+      },
+      {
+        path:         'saved',
+        name:         'Saved',
+        component:    () => import('@/pages/SavedPage.vue'),
+        meta:         { requiresAuth: true, title: 'Sevimlilar' },
       },
       {
         path:         'profile',
@@ -77,7 +91,7 @@ const routes: RouteRecordRaw[] = [
   },
 
   // ── 404 ─────────────────────────────────────────────────────────
-  { path: '/:pathMatch(.*)*', redirect: '/' },
+  { path: '/:pathMatch(.*)*', redirect: { name: 'Landing' } },
 ]
 
 const router = createRouter({

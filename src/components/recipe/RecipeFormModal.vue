@@ -6,9 +6,12 @@ import { ingredientsApi }         from '@/api/ingredients'
 import { uploadApi }              from '@/api/upload'
 import { useLangStore }   from '@/stores/langStore'
 import { useUnitsStore }  from '@/stores/unitsStore'
+import { useToast }       from '@/composables/useToast'
+import ImgUpload          from '@/components/ui/ImgUpload.vue'
 
 const lang  = useLangStore()
 const units = useUnitsStore()
+const toast = useToast()
 
 // ── Props & Emits ─────────────────────────────────────────────────
 const props = defineProps({
@@ -112,6 +115,26 @@ function selectIngredient(ing) {
   }
   ingResults.value = []
   ingSearch.value  = ''
+}
+
+const ingCreating = ref(false)
+async function createAndSelectIngredient() {
+  const name = ingSearch.value.trim()
+  if (!name) return
+  ingCreating.value = true
+  try {
+    const res = await ingredientsApi.create({ nameUz: name })
+    const created = res.data?.data ?? res.data
+    selectIngredient(created)
+    activeIngRow.value = -1
+    toast.success(`"${name}" ingredienti qo'shildi!`)
+  } catch (err) {
+    const msg = err?.response?.data?.message || lang.t('common.error_save')
+    toast.error(msg)
+    errorMsg.value = msg
+  } finally {
+    ingCreating.value = false
+  }
 }
 
 // ── Nutrition ─────────────────────────────────────────────────────
@@ -294,61 +317,19 @@ async function save() {
     }
 
     const saved = res.data?.data ?? res.data
+    toast.success(props.recipe ? 'Retsept yangilandi! ✓' : "Retsept qo'shildi! ✓")
     emit('saved', saved)
     emit('close')
   } catch (err) {
     const msg = err?.response?.data?.message || err?.response?.data?.data
-    if (typeof msg === 'object') {
-      errorMsg.value = Object.values(msg).join(', ')
-    } else {
-      errorMsg.value = msg || lang.t('common.error_save')
-    }
+    const text = typeof msg === 'object' ? Object.values(msg).join(', ') : (msg || lang.t('common.error_save'))
+    errorMsg.value = text
+    toast.error(text)
   } finally {
     saving.value = false
   }
 }
 
-// ── Image upload ──────────────────────────────────────────────────
-const imgError      = ref(false)
-const imgUploading  = ref(false)
-const fileInputRef  = ref(null)
-const stepFileRefs  = ref([])
-const stepUploading = ref([])
-
-watch(() => form.value.imageUrl, () => { imgError.value = false })
-
-function triggerFileInput() { fileInputRef.value?.click() }
-
-async function onFileSelected(e) {
-  const file = e.target.files?.[0]
-  if (!file) return
-  imgUploading.value = true
-  imgError.value = false
-  try {
-    const res = await uploadApi.image(file)
-    form.value.imageUrl = res.data?.data?.url ?? res.data?.url ?? ''
-  } catch (err) {
-    errorMsg.value = err?.response?.data?.message || lang.t('common.error_save')
-  } finally {
-    imgUploading.value = false
-    e.target.value = ''
-  }
-}
-
-async function onStepFileSelected(e, i) {
-  const file = e.target.files?.[0]
-  if (!file) return
-  stepUploading.value[i] = true
-  try {
-    const res = await uploadApi.image(file)
-    steps.value[i].imageUrl = res.data?.data?.url ?? res.data?.url ?? ''
-  } catch (err) {
-    errorMsg.value = err?.response?.data?.message || lang.t('common.error_save')
-  } finally {
-    stepUploading.value[i] = false
-    e.target.value = ''
-  }
-}
 </script>
 
 <template>
@@ -468,41 +449,7 @@ async function onStepFileSelected(e, i) {
                 <!-- Image upload -->
                 <div class="form-field span-2">
                   <label class="field-label">{{ lang.t('form.image') }}</label>
-
-                  <!-- Hidden file input -->
-                  <input
-                    ref="fileInputRef"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    style="display:none"
-                    @change="onFileSelected"
-                  />
-
-                  <!-- Upload area -->
-                  <div class="img-upload-wrap" @click="triggerFileInput">
-                    <!-- Preview if URL set -->
-                    <div v-if="form.imageUrl && !imgError" class="img-preview-box">
-                      <img :src="form.imageUrl" @error="imgError = true" />
-                      <div class="img-change-overlay">
-                        <span>{{ lang.t('form.image_change') }}</span>
-                      </div>
-                    </div>
-                    <!-- Uploading spinner -->
-                    <div v-else-if="imgUploading" class="img-placeholder uploading">
-                      <span class="upload-spin" />
-                      <span class="upload-hint">{{ lang.t('common.loading') }}</span>
-                    </div>
-                    <!-- Empty state -->
-                    <div v-else class="img-placeholder">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                      </svg>
-                      <span class="upload-hint">{{ lang.t('form.image_hint') }}</span>
-                      <span class="upload-sub">{{ lang.t('form.image_sub') }}</span>
-                    </div>
-                  </div>
-
+                  <ImgUpload v-model="form.imageUrl" size="md" :placeholder="lang.t('form.image_hint')" />
                 </div>
                 <!-- Visible toggle -->
                 <div class="form-field span-2">
@@ -538,29 +485,7 @@ async function onStepFileSelected(e, i) {
                         class="field-input step-dur"
                         :placeholder="lang.t('form.step_duration')"
                       />
-                      <input
-                        :ref="el => stepFileRefs[i] = el"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        style="display:none"
-                        @change="onStepFileSelected($event, i)"
-                      />
-                      <button
-                        type="button"
-                        class="step-img-btn"
-                        :class="{ 'step-img-done': step.imageUrl }"
-                        @click="stepFileRefs[i]?.click()"
-                        :disabled="stepUploading[i]"
-                      >
-                        <span v-if="stepUploading[i]" class="upload-spin sm" />
-                        <svg v-else-if="step.imageUrl" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01"/>
-                        </svg>
-                        {{ stepUploading[i] ? '...' : step.imageUrl ? 'Rasm yuklandi' : 'Rasm' }}
-                      </button>
+                      <ImgUpload v-model="step.imageUrl" size="sm" placeholder="Bosqich rasmi" class="step-img-upload" />
                     </div>
                   </div>
                   <button class="step-del" @click="removeStep(i)">
@@ -576,67 +501,120 @@ async function onStepFileSelected(e, i) {
 
             <!-- ── TAB: INGREDIENTS ── -->
             <div v-show="activeTab === 'ingredients'" class="tab-content">
-              <div class="tab-empty-hint" v-if="!ingredientLines.length">
-                {{ lang.t('form.no_ingredients') }}
+
+              <!-- Empty state -->
+              <div v-if="!ingredientLines.length" class="ing-empty">
+                <div class="ing-empty-icon">🧅</div>
+                <p class="ing-empty-title">Hali ingredient qo'shilmagan</p>
+                <p class="ing-empty-sub">Ingredientlarni qo'shib retseptni to'ldiring</p>
               </div>
 
               <div class="ing-list">
-                <div v-for="(line, i) in ingredientLines" :key="i" class="ing-row">
-                  <!-- Ingredient select -->
-                  <div class="ing-search-wrap">
-                    <div
-                      class="ing-selected"
-                      :class="{ 'ing-placeholder': !line.ingredient }"
-                      @click="openIngSearch(i)"
-                    >
-                      {{ line.ingredient ? lang.ingName(line.ingredient) : ('🔍 ' + lang.t('form.ing_search')) }}
-                    </div>
-                    <!-- Search dropdown for this row -->
-                    <div v-if="activeIngRow === i" class="ing-dropdown">
-                      <div class="ing-search-input-wrap">
-                        <input
-                          v-model="ingSearch"
-                          @input="doIngSearch"
-                          class="ing-search-input"
-                          :placeholder="lang.t('form.ing_search')"
-                          autofocus
-                        />
-                        <div v-if="ingSearching" class="ing-spinner">⏳</div>
+                <div v-for="(line, i) in ingredientLines" :key="i" class="ing-card">
+                  <!-- Card header: number + name selector + delete -->
+                  <div class="ing-card-top">
+                    <span class="ing-num">{{ String(i + 1).padStart(2, '0') }}</span>
+
+                    <!-- Ingredient selector -->
+                    <div class="ing-search-wrap">
+                      <div
+                        class="ing-selected"
+                        :class="{ 'ing-placeholder': !line.ingredient, 'ing-selected-open': activeIngRow === i }"
+                        @click="openIngSearch(i)"
+                      >
+                        <svg class="ing-sel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+                        </svg>
+                        <span>{{ line.ingredient ? lang.ingName(line.ingredient) : lang.t('form.ing_search') }}</span>
+                        <svg class="ing-sel-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
                       </div>
-                      <div v-if="ingResults.length" class="ing-results">
-                        <button
-                          v-for="ing in ingResults"
-                          :key="ing.id"
-                          class="ing-result-item"
-                          @click="selectIngredient(ing)"
-                        >
-                          {{ lang.ingName(ing) || ing.nameUz }}
-                          <span v-if="ing.nameRu && lang.lang !== 'ru'" class="ing-ru">{{ ing.nameRu }}</span>
+
+                      <!-- Dropdown -->
+                      <div v-if="activeIngRow === i" class="ing-dropdown">
+                        <div class="ing-search-input-wrap">
+                          <svg class="ing-drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+                          </svg>
+                          <input
+                            v-model="ingSearch"
+                            @input="doIngSearch"
+                            class="ing-search-input"
+                            :placeholder="lang.t('form.ing_search')"
+                            autofocus
+                          />
+                          <span v-if="ingSearching" class="ing-spin" />
+                        </div>
+                        <div v-if="ingResults.length" class="ing-results">
+                          <button
+                            v-for="ing in ingResults"
+                            :key="ing.id"
+                            class="ing-result-item"
+                            @click="selectIngredient(ing)"
+                          >
+                            <span class="ing-result-name">{{ lang.ingName(ing) || ing.nameUz }}</span>
+                            <span v-if="ing.nameRu && lang.lang !== 'ru'" class="ing-ru">{{ ing.nameRu }}</span>
+                          </button>
+                        </div>
+                        <div v-else-if="ingSearch && !ingSearching" class="ing-no-results">
+                          <span class="ing-no-results-text">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            "{{ ingSearch }}" topilmadi
+                          </span>
+                          <button
+                            class="ing-create-btn"
+                            :disabled="ingCreating"
+                            @click="createAndSelectIngredient"
+                          >
+                            <span v-if="ingCreating" class="ing-spin" />
+                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                            "{{ ingSearch }}" — yangi ingredient qo'shish
+                          </button>
+                        </div>
+                        <div v-else-if="!ingSearch" class="ing-hint-text">
+                          Ingredient nomini yozing...
+                        </div>
+                        <button class="ing-close-btn" @click="activeIngRow = -1">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                          {{ lang.t('common.cancel') }}
                         </button>
                       </div>
-                      <div v-else-if="ingSearch && !ingSearching" class="ing-no-results">
-                        {{ lang.t('form.ing_not_found') }}
-                      </div>
-                      <button class="ing-close-btn" @click="activeIngRow = -1">✕ {{ lang.t('common.cancel') }}</button>
+                    </div>
+
+                    <button class="ing-del-btn" @click="removeIngredientLine(i)" title="O'chirish">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                  </div>
+
+                  <!-- Card body: amount + unit + notes -->
+                  <div class="ing-card-body">
+                    <div class="ing-field-group">
+                      <label class="ing-field-label">Miqdor</label>
+                      <input
+                        v-model="line.amount"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        class="field-input ing-amount"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div class="ing-field-group">
+                      <label class="ing-field-label">O'lchov</label>
+                      <select v-model="line.unit" class="field-select ing-unit">
+                        <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
+                      </select>
+                    </div>
+                    <div class="ing-field-group ing-notes-group">
+                      <label class="ing-field-label">Izoh (ixtiyoriy)</label>
+                      <input
+                        v-model="line.notes"
+                        class="field-input"
+                        placeholder="Masalan: mayda doğranmış"
+                      />
                     </div>
                   </div>
-                  <!-- Amount -->
-                  <input
-                    v-model="line.amount"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    class="field-input ing-amount"
-                    :placeholder="lang.t('form.amount')"
-                  />
-                  <!-- Unit -->
-                  <select v-model="line.unit" class="field-select ing-unit">
-                    <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
-                  </select>
-                  <!-- Delete -->
-                  <button class="step-del" @click="removeIngredientLine(i)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                  </button>
                 </div>
               </div>
 
@@ -822,8 +800,9 @@ async function onStepFileSelected(e, i) {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px; color: #e2e8f0;
   font-size: 14px; outline: none; cursor: pointer;
+  color-scheme: dark;
 }
-.field-select option { background: #1e293b; }
+.field-select option { background: #1e293b; color: #e2e8f0; }
 
 /* ── Tags ── */
 .tags-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -849,46 +828,8 @@ async function onStepFileSelected(e, i) {
   background: rgba(216,90,48,0.15); border-color: rgba(216,90,48,0.4); color: #E8713E;
 }
 
-/* ── Image upload ── */
-.img-upload-wrap {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1.5px dashed rgba(255,255,255,0.12);
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  background: rgba(255,255,255,0.02);
-}
-.img-upload-wrap:hover {
-  border-color: rgba(216,90,48,0.4);
-  background: rgba(216,90,48,0.04);
-}
-.img-preview-box { position: relative; }
-.img-preview-box img { width: 100%; height: 160px; object-fit: cover; display: block; }
-.img-change-overlay {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: opacity 0.2s;
-  font-size: 13px; font-weight: 700; color: #fff;
-}
-.img-upload-wrap:hover .img-change-overlay { opacity: 1; }
-.img-placeholder {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 8px; padding: 32px 20px; color: #475569;
-}
-.img-placeholder svg { width: 36px; height: 36px; color: #334155; }
-.upload-hint { font-size: 13px; font-weight: 600; color: #64748b; }
-.upload-sub  { font-size: 11px; color: #334155; }
-.uploading { pointer-events: none; }
-.upload-spin {
-  width: 24px; height: 24px;
-  border: 3px solid rgba(216,90,48,0.2);
-  border-top-color: #E8713E;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-}
+/* ── Step img upload ── */
+.step-img-upload { flex: 1; min-width: 0; }
 
 /* ── Toggle ── */
 .toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
@@ -931,20 +872,6 @@ async function onStepFileSelected(e, i) {
 .step-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .step-meta { display: flex; gap: 8px; }
 .step-dur { width: 120px; flex-shrink: 0; }
-.step-img-btn {
-  flex: 1; height: 40px; padding: 0 12px;
-  display: flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.04);
-  border: 1px dashed rgba(255,255,255,0.12);
-  border-radius: 10px; color: #475569;
-  font-size: 12px; font-weight: 700; cursor: pointer;
-  transition: all 0.2s; white-space: nowrap;
-}
-.step-img-btn:hover:not(:disabled) { border-color: rgba(216,90,48,0.4); color: #E8713E; }
-.step-img-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
-.step-img-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.step-img-done { border-style: solid; border-color: rgba(34,197,94,0.3); color: #4ade80; }
-.upload-spin.sm { width: 14px; height: 14px; border-width: 2px; }
 .step-del {
   width: 30px; height: 30px; border-radius: 8px;
   background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.15);
@@ -968,57 +895,159 @@ async function onStepFileSelected(e, i) {
 .add-btn svg { width: 16px; height: 16px; }
 
 /* ── Ingredients ── */
-.ing-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.ing-row {
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px; padding: 10px 12px;
+/* ── Ingredient Empty State ── */
+.ing-empty {
+  text-align: center; padding: 32px 24px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 16px; margin-bottom: 16px;
 }
+.ing-empty-icon { font-size: 40px; margin-bottom: 10px; }
+.ing-empty-title { font-size: 14px; font-weight: 700; color: #64748b; margin-bottom: 4px; }
+.ing-empty-sub { font-size: 12px; color: #334155; }
+
+/* ── Ingredient Card ── */
+.ing-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.ing-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  overflow: visible;
+  transition: border-color 0.2s;
+}
+.ing-card:hover { border-color: rgba(216,90,48,0.2); }
+
+.ing-card-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ing-num {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(216,90,48,0.12); color: #E8713E;
+  font-size: 11px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; letter-spacing: 0.02em;
+}
+
+.ing-card-body {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 10px 12px;
+  flex-wrap: wrap;
+}
+.ing-field-group { display: flex; flex-direction: column; gap: 4px; }
+.ing-field-label { font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; }
+.ing-notes-group { flex: 1; min-width: 140px; }
+
+/* ── Ingredient Selector ── */
 .ing-search-wrap { flex: 1; position: relative; }
 .ing-selected {
-  height: 38px; padding: 0 12px;
-  background: rgba(255,255,255,0.05);
+  height: 38px; padding: 0 10px;
+  background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
-  display: flex; align-items: center;
+  display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: #e2e8f0;
-  cursor: pointer; transition: border-color 0.2s;
+  cursor: pointer; transition: border-color 0.2s, background 0.2s;
+  user-select: none;
 }
-.ing-selected:hover { border-color: rgba(216,90,48,0.4); }
-.ing-placeholder { color: #334155; }
+.ing-selected:hover, .ing-selected-open {
+  border-color: rgba(216,90,48,0.5);
+  background: rgba(216,90,48,0.05);
+}
+.ing-sel-icon { width: 14px; height: 14px; color: #475569; flex-shrink: 0; }
+.ing-selected span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ing-sel-arrow { width: 14px; height: 14px; color: #475569; flex-shrink: 0; transition: transform 0.2s; }
+.ing-selected-open .ing-sel-arrow { transform: rotate(180deg); color: #E8713E; }
+.ing-placeholder { color: #475569; }
+
+/* ── Dropdown ── */
 .ing-dropdown {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: #1e293b; border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px; z-index: 50; overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+  background: #1a2744; border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px; z-index: 100; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .ing-search-input-wrap {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.07);
 }
+.ing-drop-icon { width: 15px; height: 15px; color: #475569; flex-shrink: 0; }
 .ing-search-input {
   flex: 1; background: none; border: none; outline: none;
   font-size: 13px; color: #e2e8f0;
 }
-.ing-spinner { font-size: 12px; }
-.ing-results { max-height: 160px; overflow-y: auto; }
+.ing-search-input::placeholder { color: #334155; }
+.ing-spin {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: #E8713E;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ing-results { max-height: 180px; overflow-y: auto; }
 .ing-result-item {
-  width: 100%; text-align: left; padding: 9px 12px;
-  background: none; border: none; color: #e2e8f0;
-  font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px;
-  transition: background 0.15s;
+  width: 100%; text-align: left; padding: 10px 14px;
+  background: none; border: none; color: #cbd5e1;
+  font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  transition: background 0.15s, color 0.15s;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
+.ing-result-item:last-child { border-bottom: none; }
 .ing-result-item:hover { background: rgba(216,90,48,0.1); color: #E8713E; }
-.ing-ru { color: #475569; font-size: 11px; }
-.ing-no-results { padding: 10px 12px; font-size: 12px; color: #475569; }
-.ing-close-btn {
-  width: 100%; padding: 8px; background: rgba(255,255,255,0.03);
-  border: none; border-top: 1px solid rgba(255,255,255,0.06);
-  color: #475569; font-size: 12px; cursor: pointer; transition: background 0.2s;
+.ing-result-name { font-weight: 600; }
+.ing-ru { color: #475569; font-size: 11px; white-space: nowrap; }
+
+.ing-no-results { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.ing-no-results-text {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #475569;
 }
-.ing-close-btn:hover { background: rgba(255,255,255,0.06); }
-.ing-amount { width: 90px; flex-shrink: 0; }
-.ing-unit   { width: 110px; flex-shrink: 0; }
+.ing-no-results-text svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.ing-hint-text { padding: 12px 14px; font-size: 12px; color: #334155; text-align: center; }
+
+.ing-create-btn {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; padding: 9px 12px;
+  background: rgba(216,90,48,0.08);
+  border: 1px dashed rgba(216,90,48,0.4);
+  border-radius: 8px; color: #E8713E;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: background 0.2s, border-color 0.2s;
+  text-align: left;
+}
+.ing-create-btn:hover:not(:disabled) { background: rgba(216,90,48,0.15); border-color: rgba(216,90,48,0.7); }
+.ing-create-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.ing-create-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.ing-close-btn {
+  width: 100%; padding: 9px; background: rgba(255,255,255,0.02);
+  border: none; border-top: 1px solid rgba(255,255,255,0.06);
+  color: #475569; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s, color 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.ing-close-btn svg { width: 13px; height: 13px; }
+.ing-close-btn:hover { background: rgba(255,255,255,0.05); color: #94a3b8; }
+
+/* ── Ingredient del button ── */
+.ing-del-btn {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+  color: #475569; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.ing-del-btn:hover { background: rgba(239,68,68,0.12); color: #f87171; border-color: rgba(239,68,68,0.3); }
+.ing-del-btn svg { width: 15px; height: 15px; }
+
+.ing-amount { width: 86px; flex-shrink: 0; }
+.ing-unit   { width: 120px; flex-shrink: 0; }
 
 /* ── Footer ── */
 .modal-footer {
@@ -1061,8 +1090,10 @@ async function onStepFileSelected(e, i) {
   .form-grid-2 { grid-template-columns: 1fr; }
   .span-2 { grid-column: span 1; }
   .step-meta { flex-direction: column; }
-  .step-dur, .step-img-url { width: 100%; }
-  .ing-row { flex-wrap: wrap; }
-  .ing-amount, .ing-unit { width: calc(50% - 4px); }
+  .step-dur { width: 100%; }
+  .ing-card-body { flex-wrap: wrap; }
+  .ing-amount { width: 80px; }
+  .ing-unit { width: 100px; }
+  .ing-notes-group { width: 100%; }
 }
 </style>

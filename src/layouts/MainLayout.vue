@@ -1,6 +1,18 @@
 <script setup>
-import NavBar    from '@/components/ui/NavBar.vue'
-import BottomNav from '@/components/ui/BottomNav.vue'
+import { onMounted }              from 'vue'
+import NavBar                     from '@/components/ui/NavBar.vue'
+import BottomNav                  from '@/components/ui/BottomNav.vue'
+import { useFavoritesStore }      from '@/stores/favoritesStore'
+import { useAuthStore }           from '@/stores/authStore'
+
+const auth      = useAuthStore()
+const favorites = useFavoritesStore()
+
+onMounted(() => {
+  if (auth.isAuthenticated && !favorites.loaded) {
+    favorites.loadIds()
+  }
+})
 </script>
 
 <template>

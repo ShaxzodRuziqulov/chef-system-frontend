@@ -12,7 +12,7 @@ const query  = ref('')
 
 function search() {
   if (query.value.trim()) {
-    router.push({ path: '/recipes', query: { keyword: query.value.trim() } })
+    router.push({ path: '/app/recipes', query: { keyword: query.value.trim() } })
     query.value = ''
   }
 }

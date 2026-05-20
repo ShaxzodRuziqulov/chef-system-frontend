@@ -142,6 +142,10 @@ export const useAuthStore = defineStore('auth', () => {
     error.value        = null
     storage.clearAll()
     tokenStorage.clear()
+    // Sevimlilar holatini tozalash (import cycle oldini olish uchun dynamic import)
+    import('@/stores/favoritesStore').then(({ useFavoritesStore }) => {
+      useFavoritesStore().clear()
+    })
   }
 
   // ── Actions ───────────────────────────────────────────────────
@@ -154,7 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
    *
    * @returns null — muvaffaqiyatli, string — xato xabari
    */
-  async function login(credentials: LoginRequest): Promise<string | null> {
+  async function login(credentials: LoginRequest, redirectTo?: string): Promise<string | null> {
     loading.value = true
     error.value   = null
 
@@ -182,8 +186,8 @@ export const useAuthStore = defineStore('auth', () => {
       // Foydalanuvchi ma'lumotlarini state + localStorage ga saqlash
       _persistUser(payload.user)
 
-      // Asosiy sahifaga yo'naltirish
-      await router.push({ name: 'Home' })
+      // Login muvaffaqiyatli — redirect yoki Home (dashboard) ga yo'naltirish
+      await router.push(redirectTo && redirectTo !== '/' ? redirectTo : { name: 'Home' })
       return null
 
     } catch (err: unknown) {
@@ -209,7 +213,7 @@ export const useAuthStore = defineStore('auth', () => {
    *
    * @returns null — muvaffaqiyatli, string — xato xabari
    */
-  async function register(data: RegisterRequest): Promise<string | null> {
+  async function register(data: RegisterRequest, redirectTo?: string): Promise<string | null> {
     loading.value = true
     error.value   = null
 
@@ -231,7 +235,7 @@ export const useAuthStore = defineStore('auth', () => {
       _persistTokens(payload.accessToken, payload.refreshToken)
       _persistUser(userPayload)
 
-      await router.push({ name: 'Home' })
+      await router.push(redirectTo && redirectTo !== '/' ? redirectTo : { name: 'Home' })
       return null
 
     } catch (err: unknown) {
@@ -325,7 +329,7 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       _clearState()
       loading.value = false
-      await router.push({ name: 'Login' })
+      await router.push({ name: 'Landing' })
     }
   }
 

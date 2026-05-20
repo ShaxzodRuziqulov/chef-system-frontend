@@ -10,19 +10,20 @@ const langStore = useLangStore()
 const menuOpen = ref(false)
 
 const nav = computed(() => [
-  { label: langStore.t('nav.home'),      to: '/',              icon: 'home'     },
-  { label: langStore.t('nav.recipes'),   to: '/recipes',       icon: 'book'     },
-  { label: langStore.t('nav.meal_plan'), to: '/meal-plans',    icon: 'calendar' },
-  { label: langStore.t('nav.shopping'),  to: '/shopping-lists',icon: 'cart'     },
+  { label: langStore.t('nav.home'),      to: '/app',               icon: 'home'     },
+  { label: langStore.t('nav.recipes'),   to: '/app/recipes',       icon: 'book'     },
+  { label: 'Sevimlilar',                 to: '/app/saved',         icon: 'heart'    },
+  { label: langStore.t('nav.meal_plan'), to: '/app/meal-plans',    icon: 'calendar' },
+  { label: langStore.t('nav.shopping'),  to: '/app/shopping-lists', icon: 'cart'   },
 ])
 
 const isActive = (to) =>
-  to === '/' ? route.path === '/' : route.path.startsWith(to)
+  to === '/app' ? route.path === '/app' : route.path.startsWith(to)
 
 const query  = ref('')
 function search() {
   if (query.value.trim()) {
-    window.location.href = `/recipes?keyword=${encodeURIComponent(query.value.trim())}`
+    window.location.href = `/app/recipes?keyword=${encodeURIComponent(query.value.trim())}`
     query.value = ''
     menuOpen.value = false
   }
@@ -40,7 +41,7 @@ const langs = [
     <div class="nb-inner">
 
       <!-- ── Logo ── -->
-      <RouterLink to="/" class="nb-logo" @click="menuOpen = false">
+      <RouterLink to="/app" class="nb-logo" @click="menuOpen = false">
         <div class="logo-icon">🍳</div>
         <div class="logo-text">
           <span class="logo-name">OshPaz</span>
@@ -60,14 +61,15 @@ const langs = [
           <!-- Icon -->
           <svg v-if="item.icon === 'home'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
           <svg v-else-if="item.icon === 'book'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          <svg v-else-if="item.icon === 'heart'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/></svg>
           <svg v-else-if="item.icon === 'calendar'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2" stroke-linecap="round"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
           {{ item.label }}
         </RouterLink>
 
         <!-- Admin link (only for admins) -->
-        <RouterLink v-if="auth.isAdmin" to="/admin" class="nb-link nb-link-admin"
-          :class="{ 'nb-link-active': route.path.startsWith('/admin') }">
+        <RouterLink v-if="auth.isAdmin" to="/app/admin" class="nb-link nb-link-admin"
+          :class="{ 'nb-link-active': route.path.startsWith('/app/admin') }">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" stroke-width="2"/></svg>
           {{ langStore.t('nav.admin') }}
         </RouterLink>
@@ -94,7 +96,7 @@ const langs = [
 
         <!-- Auth -->
         <template v-if="auth.isAuthenticated">
-          <RouterLink to="/profile" class="nb-avatar">
+          <RouterLink to="/app/profile" class="nb-avatar">
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl" />
             <span v-else>{{ auth.initials }}</span>
           </RouterLink>
@@ -148,7 +150,7 @@ const langs = [
           {{ item.label }}
         </RouterLink>
 
-        <RouterLink v-if="auth.isAdmin" to="/admin" class="nb-mobile-link nb-mobile-admin" @click="menuOpen = false">
+        <RouterLink v-if="auth.isAdmin" to="/app/admin" class="nb-mobile-link nb-mobile-admin" @click="menuOpen = false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3" stroke-width="2"/></svg>
           Admin Panel
         </RouterLink>
@@ -156,7 +158,7 @@ const langs = [
         <!-- Auth mobile -->
         <div class="nb-mobile-auth">
           <template v-if="auth.isAuthenticated">
-            <RouterLink to="/profile" class="nb-mobile-profile" @click="menuOpen = false">
+            <RouterLink to="/app/profile" class="nb-mobile-profile" @click="menuOpen = false">
               <div class="nb-mobile-avatar">{{ auth.initials }}</div>
               <div>
                 <div class="nb-mobile-uname">{{ auth.displayName }}</div>
