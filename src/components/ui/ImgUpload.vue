@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { uploadApi } from '@/api/upload'
 import { useToast }  from '@/composables/useToast'
+import { resolveImageUrl } from '@/utils/imageUrl'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -46,7 +47,7 @@ function clear() { emit('update:modelValue', '') }
 
     <!-- Preview -->
     <div v-if="modelValue && !previewErr" class="iu-preview" @click="fileRef?.click()">
-      <img :src="modelValue" @error="previewErr = true" />
+      <img :src="resolveImageUrl(modelValue)" @error="previewErr = true" />
       <div class="iu-overlay">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

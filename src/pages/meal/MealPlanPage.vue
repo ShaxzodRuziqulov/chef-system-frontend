@@ -8,6 +8,7 @@ import { useToast }       from '@/composables/useToast'
 import { parseApiError }  from '@/utils/parseApiError'
 import { useRouter }      from 'vue-router'
 import ConfirmModal       from '@/components/ui/ConfirmModal.vue'
+import { resolveImageUrl } from '@/utils/imageUrl'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -618,7 +619,7 @@ async function load() {
                 <div v-if="newEntry.selectedRecipe" class="selected-recipe">
                   <img
                     v-if="newEntry.selectedRecipe.imageUrl"
-                    :src="newEntry.selectedRecipe.imageUrl"
+                    :src="resolveImageUrl(newEntry.selectedRecipe.imageUrl)"
                     class="sr-thumb"
                     alt=""
                   />
@@ -651,7 +652,7 @@ async function load() {
                       @click="selectRecipe(r)"
                     >
                       <div class="sr-img">
-                        <img v-if="r.imageUrl" :src="r.imageUrl" alt="" />
+                        <img v-if="r.imageUrl" :src="resolveImageUrl(r.imageUrl)" alt="" />
                         <span v-else>🍽️</span>
                       </div>
                       <div class="sr-info">

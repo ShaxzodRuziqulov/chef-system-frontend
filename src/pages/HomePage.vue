@@ -100,12 +100,7 @@ onMounted(async () => {
           :to="`/app/recipes?category=${cat.id}`"
           class="cat-item"
         >
-          <span class="cat-icon">
-              <img v-if="cat.iconUrl && cat.iconUrl.startsWith('http')"
-                   :src="cat.iconUrl" :alt="lang.catName(cat)"
-                   style="width:28px;height:28px;object-fit:contain;border-radius:4px" />
-              <template v-else>{{ cat.iconUrl || '🥘' }}</template>
-            </span>
+          <span class="cat-icon">🥘</span>
           <span class="cat-name">{{ lang.catName(cat) }}</span>
         </RouterLink>
       </div>
@@ -311,7 +306,19 @@ onMounted(async () => {
   border-color: rgba(216,90,48,0.25);
   transform: translateY(-2px);
 }
-.cat-icon { font-size: 26px; line-height: 1; }
+.cat-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; line-height: 1;
+  background: rgba(216,90,48,0.08);
+  border: 1px solid rgba(216,90,48,0.15);
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+}
+.cat-item:hover .cat-icon {
+  background: rgba(216,90,48,0.14);
+  border-color: rgba(216,90,48,0.35);
+  transform: scale(1.05);
+}
 .cat-name { font-size: 10px; font-weight: 700; color: #64748b; text-align: center; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .cat-item:hover .cat-name { color: #E8713E; }
 

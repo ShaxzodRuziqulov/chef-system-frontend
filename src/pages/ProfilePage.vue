@@ -8,6 +8,7 @@ import { mealPlansApi }    from '@/api/mealPlans'
 import { authApi }         from '@/api/auth'
 import RecipeCard          from '@/components/recipe/RecipeCard.vue'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
+import { resolveImageUrl } from '@/utils/imageUrl'
 
 const auth          = useAuthStore()
 const lang          = useLangStore()
@@ -107,6 +108,7 @@ async function saveProfile() {
     saveError.value = err
   } else {
     saveSuccess.value = true
+    await auth.fetchUser()   // serverdan yangilangan ma'lumotni qayta yuklaymiz
     setTimeout(() => { showEdit.value = false; saveSuccess.value = false }, 1000)
   }
 }
@@ -209,8 +211,13 @@ const stats = [
         <div class="profile-body">
           <div class="avatar-wrap">
             <div class="avatar">
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" alt="avatar" />
-              <span v-else>{{ auth.initials }}</span>
+              <img
+                v-if="auth.avatarUrl"
+                :src="resolveImageUrl(auth.avatarUrl)"
+                alt="avatar"
+                @error="(e) => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }"
+              />
+              <span :style="auth.avatarUrl ? 'display:none' : ''">{{ auth.initials }}</span>
             </div>
             <div class="avatar-badge" :class="auth.isAdmin ? 'badge-admin' : 'badge-user'">
               {{ auth.isAdmin ? '👑' : '🧑' }}
@@ -344,7 +351,7 @@ const stats = [
               <!-- Avatar upload -->
               <div class="avatar-upload-wrap">
                 <div class="avatar-upload" @click="avatarInput?.click()" :class="{ 'au-loading': avatarUploading }">
-                  <img v-if="avatarPreview" :src="avatarPreview" class="au-img" alt="avatar" />
+                  <img v-if="avatarPreview" :src="resolveImageUrl(avatarPreview)" class="au-img" alt="avatar" />
                   <span v-else class="au-initials">{{ auth.initials }}</span>
                   <div class="au-overlay">
                     <span v-if="avatarUploading" class="au-spinner" />

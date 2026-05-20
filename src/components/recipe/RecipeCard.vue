@@ -3,6 +3,7 @@ import { computed }           from 'vue'
 import { useLangStore }       from '@/stores/langStore'
 import { useFavoritesStore }  from '@/stores/favoritesStore'
 import { useAuthStore }       from '@/stores/authStore'
+import { resolveImageUrl }    from '@/utils/imageUrl'
 
 const props = defineProps({
   recipe: { type: Object, required: true },
@@ -34,7 +35,7 @@ function toggleFav(e) {
   <RouterLink :to="`/app/recipes/${recipe.id}`" class="recipe-card">
     <!-- Image -->
     <div class="card-img">
-      <img v-if="recipe.imageUrl" :src="recipe.imageUrl" :alt="title" loading="lazy" />
+      <img v-if="recipe.imageUrl" :src="resolveImageUrl(recipe.imageUrl)" :alt="title" loading="lazy" />
       <div v-else class="card-img-placeholder">🍽️</div>
 
       <span v-if="recipe.difficultyLevel" class="badge-diff" :class="diffMap[recipe.difficultyLevel]?.cls">

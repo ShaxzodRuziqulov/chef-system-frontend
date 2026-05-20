@@ -11,6 +11,7 @@ import { useRouter }       from 'vue-router'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
 import ImgUpload           from '@/components/ui/ImgUpload.vue'
 import { useToast }        from '@/composables/useToast'
+import { resolveImageUrl } from '@/utils/imageUrl'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -103,7 +104,7 @@ const catForm    = ref(emptyCatForm())
 const catEditing = ref(null)
 const catSaving  = ref(false)
 
-function emptyCatForm() { return { nameUz: '', nameRu: '', nameEng: '', colorCode: '#E8713E', iconUrl: '' } }
+function emptyCatForm() { return { nameUz: '', nameRu: '', nameEng: '', colorCode: '#E8713E' } }
 
 async function loadCategories() {
   const res = await categoriesApi.getAll()
@@ -112,7 +113,7 @@ async function loadCategories() {
 
 function editCat(c) {
   catEditing.value = c
-  catForm.value = { nameUz: c.nameUz || '', nameRu: c.nameRu || '', nameEng: c.nameEng || '', colorCode: c.colorCode || '#E8713E', iconUrl: c.iconUrl || '' }
+  catForm.value = { nameUz: c.nameUz || '', nameRu: c.nameRu || '', nameEng: c.nameEng || '', colorCode: c.colorCode || '#E8713E' }
 }
 
 function cancelCat() { catEditing.value = null; catForm.value = emptyCatForm() }
@@ -371,7 +372,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
       <div v-else-if="filtered.length" class="recipe-table">
         <div v-for="r in filtered" :key="r.id" class="recipe-row">
           <div class="row-img">
-            <img v-if="r.imageUrl" :src="r.imageUrl" :alt="r.titleUz" />
+            <img v-if="r.imageUrl" :src="resolveImageUrl(r.imageUrl)" :alt="r.titleUz" />
             <span v-else>🍽️</span>
           </div>
           <div class="row-info">
@@ -421,7 +422,6 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <input v-model="catForm.colorCode" type="color" class="cf-color-input" />
             <span class="cf-color-val">{{ catForm.colorCode }}</span>
           </div>
-          <ImgUpload v-model="catForm.iconUrl" size="sm" placeholder="Ikonka rasmini yuklang" />
         </div>
         <div class="crud-form-actions">
           <button v-if="catEditing" @click="cancelCat" class="btn-cancel-sm">Bekor</button>
@@ -522,7 +522,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
       <div v-else-if="ingredients.length" class="recipe-table">
         <div v-for="ing in ingredients" :key="ing.id" class="crud-row">
           <div class="ing-img-wrap">
-            <img v-if="ing.imageUrl" :src="ing.imageUrl" :alt="ing.nameUz" />
+            <img v-if="ing.imageUrl" :src="resolveImageUrl(ing.imageUrl)" :alt="ing.nameUz" />
             <span v-else>🥦</span>
           </div>
           <div class="crud-info">

@@ -4,7 +4,6 @@ export interface CategoryDto {
   nameRu?:      string
   nameEng?:     string
   description?: string
-  iconUrl?:     string
   colorCode?:   string
 }
 
@@ -13,7 +12,6 @@ export interface CategoryRequest {
   nameRu?:      string
   nameEng?:     string
   description?: string
-  iconUrl?:     string
   colorCode?:   string
 }
 

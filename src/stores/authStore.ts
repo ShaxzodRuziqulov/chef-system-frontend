@@ -96,9 +96,9 @@ export const useAuthStore = defineStore('auth', () => {
     () => user.value?.fullName || 'Foydalanuvchi',
   )
 
-  /** Avatar URL yoki null */
+  /** Avatar URL yoki null (backend snake_case yoki camelCase qaytarishi mumkin) */
   const avatarUrl = computed<string | null>(
-    () => user.value?.avatar_url ?? null,
+    () => user.value?.avatar_url ?? (user.value as any)?.avatarUrl ?? null,
   )
 
   /** Initials (avatar yo'q bo'lsa ko'rsatish uchun) */

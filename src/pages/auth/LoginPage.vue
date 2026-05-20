@@ -307,7 +307,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   min-width: 0;
 }
 .field-input::placeholder {
-  color: #334155;
+  color: #475569;
 }
 
 .valid-icon {

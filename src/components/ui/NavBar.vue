@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRoute }      from 'vue-router'
 import { useAuthStore }  from '@/stores/authStore'
 import { useLangStore }  from '@/stores/langStore'
+import { resolveImageUrl } from '@/utils/imageUrl'
 
 const route    = useRoute()
 const auth     = useAuthStore()
@@ -97,7 +98,7 @@ const langs = [
         <!-- Auth -->
         <template v-if="auth.isAuthenticated">
           <RouterLink to="/app/profile" class="nb-avatar">
-            <img v-if="auth.avatarUrl" :src="auth.avatarUrl" />
+            <img v-if="auth.avatarUrl" :src="resolveImageUrl(auth.avatarUrl)" />
             <span v-else>{{ auth.initials }}</span>
           </RouterLink>
         </template>
