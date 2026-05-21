@@ -2,17 +2,22 @@
 import { computed }          from 'vue'
 import { useRoute }          from 'vue-router'
 import { useFavoritesStore } from '@/stores/favoritesStore'
+import { useLangStore }      from '@/stores/langStore'
 
 const route     = useRoute()
 const favorites = useFavoritesStore()
+const lang      = useLangStore()
 
-const nav = [
-  { icon: 'home',    label: 'Asosiy',   to: '/app' },
-  { icon: 'recipes', label: 'Retsept',  to: '/app/recipes' },
-  { icon: 'heart',   label: 'Saqlangan', to: '/app/saved' },
-  { icon: 'calendar',label: 'Reja',     to: '/app/meal-plans' },
-  { icon: 'cart',    label: 'Xarid',    to: '/app/shopping-lists' },
-]
+const nav = computed(() => {
+  void lang.lang  // lang o'zgarganda qayta hisoblansin
+  return [
+    { icon: 'home',     label: lang.t('nav.home'),      to: '/app' },
+    { icon: 'recipes',  label: lang.t('nav.recipes'),   to: '/app/recipes' },
+    { icon: 'heart',    label: lang.t('nav.saved'),     to: '/app/saved' },
+    { icon: 'calendar', label: lang.t('nav.meal_plan'), to: '/app/meal-plans' },
+    { icon: 'cart',     label: lang.t('nav.shopping'),  to: '/app/shopping-lists' },
+  ]
+})
 
 const isActive = (to) =>
   to === '/app' ? route.path === '/app' : route.path.startsWith(to)
@@ -70,8 +75,8 @@ const isActive = (to) =>
   left: 0;
   right: 0;
   height: 68px;
-  background: #0d1526;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--bd);
   display: flex;
   align-items: stretch;
   z-index: 20;
@@ -86,13 +91,13 @@ const isActive = (to) =>
   justify-content: center;
   gap: 3px;
   text-decoration: none;
-  color: #334155;
+  color: var(--tx-6);
   border-radius: 12px;
   transition: color 0.2s, background 0.2s;
   margin: 6px 2px;
   position: relative;
 }
-.nav-item:hover { color: #64748b; }
+.nav-item:hover { color: var(--tx-4); }
 
 .nav-active { color: #E8713E; background: rgba(216, 90, 48, 0.1); }
 

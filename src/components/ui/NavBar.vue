@@ -3,11 +3,13 @@ import { ref, computed } from 'vue'
 import { useRoute }      from 'vue-router'
 import { useAuthStore }  from '@/stores/authStore'
 import { useLangStore }  from '@/stores/langStore'
+import { useThemeStore } from '@/stores/themeStore'
 import { resolveImageUrl } from '@/utils/imageUrl'
 
 const route    = useRoute()
 const auth     = useAuthStore()
 const langStore = useLangStore()
+const theme    = useThemeStore()
 const menuOpen = ref(false)
 
 const nav = computed(() => [
@@ -84,6 +86,31 @@ const langs = [
           <input v-model="query" type="text" :placeholder="langStore.t('nav.search')" />
         </form>
 
+        <!-- Theme toggle -->
+        <button
+          class="nb-theme-btn"
+          @click="theme.toggle()"
+          :title="theme.isDark ? 'Kunduzgi rejim' : 'Tungi rejim'"
+          :aria-label="theme.isDark ? 'Kunduzgi rejim' : 'Tungi rejim'"
+        >
+          <!-- Sun (dark mode → switch to light) -->
+          <svg v-if="theme.isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <!-- Moon (light mode → switch to dark) -->
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+          </svg>
+        </button>
+
         <!-- Language switcher -->
         <div class="nb-lang">
           <button
@@ -124,15 +151,30 @@ const langs = [
           <input v-model="query" type="text" :placeholder="langStore.t('nav.search_mobile')" />
         </form>
 
-        <!-- Mobile language switcher -->
-        <div class="nb-mobile-lang">
-          <button
-            v-for="l in langs"
-            :key="l.code"
-            class="nb-lang-btn"
-            :class="{ 'nb-lang-active': langStore.lang === l.code }"
-            @click="langStore.setLang(l.code)"
-          >{{ l.label }}</button>
+        <!-- Mobile language switcher + theme toggle -->
+        <div class="nb-mobile-top-row">
+          <div class="nb-mobile-lang">
+            <button
+              v-for="l in langs"
+              :key="l.code"
+              class="nb-lang-btn"
+              :class="{ 'nb-lang-active': langStore.lang === l.code }"
+              @click="langStore.setLang(l.code)"
+            >{{ l.label }}</button>
+          </div>
+          <button class="nb-mobile-theme-btn" @click="theme.toggle()" :title="theme.isDark ? 'Kunduzgi rejim' : 'Tungi rejim'">
+            <svg v-if="theme.isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+            </svg>
+            <span>{{ theme.isDark ? 'Kunduz' : 'Tun' }}</span>
+          </button>
         </div>
 
         <!-- Nav links -->
@@ -189,8 +231,8 @@ const langs = [
   position: sticky;
   top: 0;
   z-index: 50;
-  background: #0d1526;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--bd);
   backdrop-filter: blur(20px);
 }
 
@@ -225,7 +267,7 @@ const langs = [
   box-shadow: 0 4px 12px rgba(216,90,48,0.4);
 }
 .logo-text  { display: flex; flex-direction: column; line-height: 1; }
-.logo-name  { font-size: 16px; font-weight: 900; color: #f1f5f9; letter-spacing: -0.3px; }
+.logo-name  { font-size: 16px; font-weight: 900; color: var(--tx-1); letter-spacing: -0.3px; }
 .logo-tag   { font-size: 9px; font-weight: 800; color: #E8713E; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 1px; }
 
 /* ── Desktop nav ── */
@@ -243,14 +285,14 @@ const langs = [
   padding: 7px 12px;
   border-radius: 10px;
   text-decoration: none;
-  color: #64748b;
+  color: var(--tx-4);
   font-size: 13px;
   font-weight: 700;
   transition: background 0.2s, color 0.2s;
   white-space: nowrap;
 }
 .nb-link svg { width: 15px; height: 15px; flex-shrink: 0; }
-.nb-link:hover { background: rgba(255,255,255,0.06); color: #94a3b8; }
+.nb-link:hover { background: var(--bd); color: var(--tx-3); }
 .nb-link-active {
   background: rgba(216,90,48,0.12);
   color: #E8713E;
@@ -276,8 +318,8 @@ const langs = [
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 10px;
   padding: 0 12px;
   height: 36px;
@@ -285,18 +327,18 @@ const langs = [
 }
 .nb-search:focus-within {
   border-color: rgba(216,90,48,0.5);
-  background: rgba(255,255,255,0.07);
+  background: var(--bg-input-f);
 }
-.nb-search svg   { width: 14px; height: 14px; color: #475569; flex-shrink: 0; }
+.nb-search svg   { width: 14px; height: 14px; color: var(--tx-5); flex-shrink: 0; }
 .nb-search input {
   background: none;
   border: none;
   outline: none;
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   width: 150px;
 }
-.nb-search input::placeholder { color: #334155; }
+.nb-search input::placeholder { color: var(--tx-6); }
 
 .nb-avatar {
   width: 34px;
@@ -323,12 +365,12 @@ const langs = [
   text-decoration: none;
   font-size: 13px;
   font-weight: 700;
-  color: #94a3b8;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  color: var(--tx-3);
+  border: 1px solid var(--bd-xl);
+  background: var(--bg-card-md);
   transition: all 0.2s;
 }
-.nb-btn-login:hover { color: #e2e8f0; background: rgba(255,255,255,0.08); }
+.nb-btn-login:hover { color: var(--tx-2); background: var(--bd-md); }
 
 .nb-btn-reg {
   padding: 7px 14px;
@@ -348,8 +390,8 @@ const langs = [
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd-md);
   border-radius: 10px;
   padding: 3px;
 }
@@ -364,19 +406,41 @@ const langs = [
   border-radius: 7px;
   border: none;
   background: none;
-  color: #475569;
+  color: var(--tx-5);
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
   letter-spacing: 0.04em;
   transition: background 0.15s, color 0.15s;
 }
-.nb-lang-btn:hover { color: #94a3b8; background: rgba(255,255,255,0.06); }
+.nb-lang-btn:hover { color: var(--tx-3); background: var(--bd); }
 .nb-lang-active {
   background: linear-gradient(135deg, #D85A30, #E8713E) !important;
   color: #fff !important;
   box-shadow: 0 2px 8px rgba(216,90,48,0.35);
 }
+
+/* ── Theme toggle (desktop) ── */
+.nb-theme-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md);
+  color: var(--tx-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.nb-theme-btn:hover {
+  background: var(--bd-md);
+  color: var(--tx-1);
+  border-color: var(--bd-xl);
+}
+.nb-theme-btn svg { width: 16px; height: 16px; }
 
 /* ── Hamburger ── */
 .nb-burger {
@@ -384,31 +448,31 @@ const langs = [
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--tx-4);
   padding: 8px;
   border-radius: 8px;
   transition: background 0.2s, color 0.2s;
   margin-left: auto;
 }
-.nb-burger:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.nb-burger:hover { background: var(--bd); color: var(--tx-2); }
 .nb-burger svg { width: 22px; height: 22px; }
 
 /* ── Mobile menu ── */
 .nb-mobile {
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
   padding: 12px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: #0d1526;
+  background: var(--bg-surface);
 }
 
 .nb-mobile-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
   padding: 0 14px;
   height: 44px;
@@ -416,12 +480,12 @@ const langs = [
   transition: border-color 0.2s;
 }
 .nb-mobile-search:focus-within { border-color: rgba(216,90,48,0.5); }
-.nb-mobile-search svg   { width: 16px; height: 16px; color: #475569; flex-shrink: 0; }
+.nb-mobile-search svg   { width: 16px; height: 16px; color: var(--tx-5); flex-shrink: 0; }
 .nb-mobile-search input {
   flex: 1; background: none; border: none; outline: none;
-  font-size: 14px; color: #e2e8f0;
+  font-size: 14px; color: var(--tx-2);
 }
-.nb-mobile-search input::placeholder { color: #334155; }
+.nb-mobile-search input::placeholder { color: var(--tx-6); }
 
 .nb-mobile-link {
   display: flex;
@@ -430,20 +494,20 @@ const langs = [
   padding: 11px 14px;
   border-radius: 12px;
   text-decoration: none;
-  color: #64748b;
+  color: var(--tx-4);
   font-size: 14px;
   font-weight: 700;
   transition: background 0.2s, color 0.2s;
 }
 .nb-mobile-link svg { width: 18px; height: 18px; flex-shrink: 0; }
-.nb-mobile-link:hover  { background: rgba(255,255,255,0.05); color: #94a3b8; }
+.nb-mobile-link:hover  { background: var(--bg-card); color: var(--tx-3); }
 .nb-mobile-active { background: rgba(216,90,48,0.1); color: #E8713E; }
 .nb-mobile-admin  { color: #f59e0b; }
 
 .nb-mobile-auth {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -455,18 +519,18 @@ const langs = [
   padding: 10px 14px;
   border-radius: 12px;
   text-decoration: none;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   transition: background 0.2s;
 }
-.nb-mobile-profile:hover { background: rgba(255,255,255,0.06); }
+.nb-mobile-profile:hover { background: var(--bd); }
 .nb-mobile-avatar {
   width: 36px; height: 36px; border-radius: 10px;
   background: linear-gradient(135deg, #D85A30, #E8713E);
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: 800; color: #fff; flex-shrink: 0;
 }
-.nb-mobile-uname { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+.nb-mobile-uname { font-size: 13px; font-weight: 700; color: var(--tx-2); }
 .nb-mobile-urole { font-size: 10px; font-weight: 700; color: #E8713E; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .nb-mobile-logout {
@@ -486,6 +550,30 @@ const langs = [
 }
 .nb-mobile-logout:hover { background: rgba(239,68,68,0.15); }
 .nb-mobile-logout svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ── Mobile top row (lang + theme toggle) ── */
+.nb-mobile-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 4px;
+}
+.nb-mobile-theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md);
+  color: var(--tx-3);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.nb-mobile-theme-btn:hover { background: var(--bd-md); color: var(--tx-1); }
+.nb-mobile-theme-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 
 /* ── Mobile breakpoints ── */
 @media (max-width: 1023px) {

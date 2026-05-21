@@ -17,7 +17,10 @@ export default defineConfig(({ mode }) => {
                 '/api': {
                     target: env.VITE_API_BASE_URL?.replace('/api', '') ?? 'http://localhost:8090',
                     changeOrigin: true,
-                    rewrite: (path) => path, // /api/... → /api/...
+                },
+                '/uploads': {
+                    target: env.VITE_API_BASE_URL?.replace('/api', '') ?? 'http://localhost:8090',
+                    changeOrigin: true,
                 },
             },
         },

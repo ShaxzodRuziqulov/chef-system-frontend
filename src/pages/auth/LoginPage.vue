@@ -158,7 +158,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background-color: #0f172a;
+  background-color: var(--bg-base);
   position: relative;
   overflow: hidden;
 }
@@ -186,8 +186,8 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   z-index: 10;
   width: 100%;
   max-width: 460px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd-md);
   border-radius: 32px;
   padding: 36px 44px 48px;
   backdrop-filter: blur(40px);
@@ -229,14 +229,14 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   text-align: center;
   font-size: 28px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--tx-1);
   letter-spacing: -0.5px;
   margin-bottom: 8px;
 }
 .subtitle {
   text-align: center;
   font-size: 15px;
-  color: #94a3b8;
+  color: var(--tx-3);
   margin-bottom: 36px;
 }
 
@@ -258,7 +258,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: var(--tx-4);
 }
 
 /* ── Input Wrap ── */
@@ -266,15 +266,15 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-input);
+  border: 1.5px solid var(--bd-md);
   border-radius: 14px;
   padding: 0 16px;
   height: 56px;
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 .input-wrap:focus-within {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-input-f);
   border-color: rgba(216, 90, 48, 0.6);
   box-shadow: 0 0 0 4px rgba(216, 90, 48, 0.1);
 }
@@ -290,7 +290,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #475569;
+  color: var(--tx-5);
   transition: color 0.2s;
 }
 .input-wrap:focus-within .input-icon {
@@ -303,11 +303,11 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   border: none;
   outline: none;
   font-size: 15px;
-  color: #f1f5f9;
+  color: var(--tx-1);
   min-width: 0;
 }
 .field-input::placeholder {
-  color: #475569;
+  color: var(--tx-5);
 }
 
 .valid-icon {
@@ -324,11 +324,11 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   padding: 0;
   display: flex;
   align-items: center;
-  color: #475569;
+  color: var(--tx-5);
   transition: color 0.2s;
   flex-shrink: 0;
 }
-.toggle-btn:hover { color: #f1f5f9; }
+.toggle-btn:hover { color: var(--tx-1); }
 .toggle-btn svg {
   width: 20px;
   height: 20px;
@@ -356,9 +356,9 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   user-select: none;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--tx-4);
 }
-.remember-label:hover { color: #94a3b8; }
+.remember-label:hover { color: var(--tx-3); }
 
 .checkbox-wrap {
   position: relative;
@@ -378,8 +378,8 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  border: 1.5px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+  border: 1.5px solid var(--bd-xl);
+  background: var(--bg-input);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -477,12 +477,12 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
   padding-top: 24px;
 }
 .card-footer p {
   font-size: 14px;
-  color: #64748b;
+  color: var(--tx-4);
   font-weight: 500;
 }
 .card-footer p a {
@@ -494,7 +494,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
 .card-footer p a:hover { color: #F0997B; }
 .card-footer span {
   font-size: 11px;
-  color: #334155;
+  color: var(--tx-6);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 700;

@@ -247,6 +247,133 @@ async function addEntry() {
   }
 }
 
+// ── Random to'ldirish ─────────────────────────────────────────────────
+const showRandom      = ref(false)
+const randomPlanId    = ref(null)
+const randomLoading   = ref(false)
+const randomSearch    = ref('')
+const randomSelected  = ref([])   // tanlangan recipe id lar (bo'sh = hammasi)
+const randomMeals     = ref({ BREAKFAST: true, LUNCH: true, DINNER: true, SNACK: false })
+const randomOnlyEmpty = ref(true)
+
+const randomPool = computed(() => {
+  const q = randomSearch.value.trim().toLowerCase()
+  if (!q) return allRecipes.value
+  return allRecipes.value.filter(r =>
+    (r.titleUz || '').toLowerCase().includes(q) ||
+    (r.titleRu || '').toLowerCase().includes(q)
+  )
+})
+
+function toggleRandomRecipe(id) {
+  const idx = randomSelected.value.indexOf(id)
+  if (idx === -1) randomSelected.value.push(id)
+  else randomSelected.value.splice(idx, 1)
+}
+
+function openRandomModal(planId) {
+  randomPlanId.value = planId
+  randomSelected.value = []
+  randomSearch.value = ''
+  randomMeals.value = { BREAKFAST: true, LUNCH: true, DINNER: true, SNACK: false }
+  randomOnlyEmpty.value = true
+  showRandom.value = true
+}
+
+// Qoidalar: BREAKFAST uchun HARD tavsiya etilmaydi
+const MEAL_DIFFICULTY_RULES = {
+  BREAKFAST: ['EASY', 'MEDIUM'],   // ertalab og'ir ovqat yo'q
+  LUNCH:     ['EASY', 'MEDIUM', 'HARD'],
+  DINNER:    ['EASY', 'MEDIUM', 'HARD'],
+  SNACK:     ['EASY'],              // yengilgina snack
+}
+
+async function applyRandom() {
+  const plan = plans.value.find(p => p.id === randomPlanId.value)
+  if (!plan) return
+
+  randomLoading.value = true
+  try {
+    // Mavjud entries (bo'sh slotlarni o'tkazib yuborish uchun)
+    const existingEntries = plan.entries || []
+
+    // Pool: tanlangan yoki hammasi
+    const pool = randomSelected.value.length > 0
+      ? allRecipes.value.filter(r => randomSelected.value.includes(r.id))
+      : allRecipes.value
+
+    // Hafta davomida ishlatilgan recipe id larni kuzatamiz (takrorlanishni kamaytirish)
+    const usedThisWeek = new Map() // recipeId → necha marta ishlatildi
+
+    const toAdd = []
+
+    for (const day of DAYS) {
+      const dayEntries = existingEntries.filter(e => {
+        const d = typeof e.dayOfWeek === 'number' ? DAYS[e.dayOfWeek - 1] : e.dayOfWeek
+        return d === day
+      })
+      const usedThisDay = new Set(dayEntries.map(e => e.recipeId))
+
+      for (const mealType of Object.keys(randomMeals.value)) {
+        if (!randomMeals.value[mealType]) continue
+
+        // Bo'sh slotni tekshirish
+        if (randomOnlyEmpty.value) {
+          const alreadyFilled = dayEntries.some(e => e.mealType === mealType)
+          if (alreadyFilled) continue
+        }
+
+        // Qoidaga mos retseptlar
+        const allowed = MEAL_DIFFICULTY_RULES[mealType]
+        let candidates = pool.filter(r =>
+          allowed.includes(r.difficultyLevel || 'MEDIUM') &&
+          !usedThisDay.has(r.id)
+        )
+
+        // Agar yetarli bo'lmasa, usedThisDay shartini olib tashlaymiz
+        if (!candidates.length) {
+          candidates = pool.filter(r => allowed.includes(r.difficultyLevel || 'MEDIUM'))
+        }
+        // Hali ham bo'sh bo'lsa — barcha pool dan
+        if (!candidates.length) candidates = [...pool]
+        if (!candidates.length) continue
+
+        // Kam ishlatilganlarni ustunlik bilan tanlash
+        candidates.sort((a, b) =>
+          (usedThisWeek.get(a.id) || 0) - (usedThisWeek.get(b.id) || 0)
+        )
+        // Bir xil "ball" li retseptlar orasidan tasodifiy
+        const minUsed = usedThisWeek.get(candidates[0].id) || 0
+        const topCandidates = candidates.filter(r => (usedThisWeek.get(r.id) || 0) === minUsed)
+        const chosen = topCandidates[Math.floor(Math.random() * topCandidates.length)]
+
+        usedThisDay.add(chosen.id)
+        usedThisWeek.set(chosen.id, (usedThisWeek.get(chosen.id) || 0) + 1)
+
+        toAdd.push({ recipeId: chosen.id, dayOfWeek: day, mealType, servings: 1 })
+      }
+    }
+
+    // API ga ketma-ket yuboramiz
+    for (const entry of toAdd) {
+      await mealPlansApi.addEntry(randomPlanId.value, entry)
+    }
+
+    // Rejani yangilaymiz
+    const planRes = await mealPlansApi.getById(randomPlanId.value)
+    const updatedPlan = planRes.data?.data ?? planRes.data
+    const idx = plans.value.findIndex(p => p.id === randomPlanId.value)
+    if (idx !== -1) plans.value[idx] = updatedPlan
+
+    showRandom.value = false
+    toast.success(`${toAdd.length} ta ovqat qo'shildi! 🎲`)
+  } catch (e) {
+    toast.error(parseApiError(e, "Random to'ldirishda xato"))
+  } finally {
+    randomLoading.value = false
+  }
+}
+
 // ── Delete entry ───────────────────────────────────────────────────────
 const confirmEntryDelete = ref({ show: false, planId: null, entryId: null })
 
@@ -363,6 +490,9 @@ async function load() {
                 <polygon points="5 3 19 12 5 21 5 3"/>
               </svg>
               {{ lang.t('meal.activate') }}
+            </button>
+            <button @click.stop="openRandomModal(plan.id)" class="btn-icon btn-random" title="Random to'ldirish">
+              🎲
             </button>
             <button @click="openEntryModal(plan.id, null)" class="btn-icon btn-add" title="Ovqat qo'shish">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -737,6 +867,104 @@ async function load() {
       </Transition>
     </Teleport>
 
+    <!-- ══════════ RANDOM MODAL ══════════ -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="showRandom" class="modal-overlay" @click.self="showRandom = false">
+          <div class="modal-box modal-box--random">
+            <div class="modal-header">
+              <h2 class="modal-title">🎲 Random to'ldirish</h2>
+              <button class="modal-close" @click="showRandom = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <div class="modal-body">
+
+              <!-- Qoidalar -->
+              <div class="random-info">
+                <div class="ri-row"><span class="ri-badge ri-breakfast">Ertalik</span> Faqat yengil/o'rta ovqatlar (EASY / MEDIUM)</div>
+                <div class="ri-row"><span class="ri-badge ri-snack">Snack</span> Faqat yengil ovqatlar (EASY)</div>
+                <div class="ri-row"><span class="ri-badge ri-lunch">Tushlik / Kechki</span> Har qanday ovqat</div>
+              </div>
+
+              <!-- Ovqat turlari -->
+              <div class="form-group">
+                <label class="form-label">Qaysi ovqat turlarini to'ldirish?</label>
+                <div class="meal-type-checks">
+                  <label v-for="(checked, mt) in randomMeals" :key="mt" class="mt-check"
+                    :style="{ borderColor: checked ? MEAL_COLORS[mt]?.border : 'var(--bd)', background: checked ? MEAL_COLORS[mt]?.bg : 'transparent' }">
+                    <input type="checkbox" v-model="randomMeals[mt]" class="mt-cb" />
+                    <span class="mt-dot" :style="{ background: MEAL_COLORS[mt]?.dot }" />
+                    <span :style="{ color: checked ? MEAL_COLORS[mt]?.text : 'var(--tx-4)' }">{{ mealLabel[mt] }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Faqat bo'sh slotlar -->
+              <label class="only-empty-check">
+                <input type="checkbox" v-model="randomOnlyEmpty" />
+                <span>Faqat bo'sh slotlarni to'ldirish (mavjud ovqatlarni o'zgartirmaslik)</span>
+              </label>
+
+              <!-- Retsept tanlash (ixtiyoriy) -->
+              <div class="form-group">
+                <label class="form-label">
+                  Foydalaniladigan retseptlar
+                  <span class="opt">ixtiyoriy — bo'sh qoldirsa barcha retseptlardan</span>
+                </label>
+                <div class="search-field" style="margin-bottom: 8px;">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="sf-icon">
+                    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                  </svg>
+                  <input v-model="randomSearch" class="sf-input" placeholder="Retsept qidirish…" />
+                  <span v-if="randomSelected.length" class="sf-count">{{ randomSelected.length }} ta tanlangan</span>
+                </div>
+                <div class="random-recipe-list">
+                  <label
+                    v-for="r in randomPool.slice(0, 30)"
+                    :key="r.id"
+                    class="rr-item"
+                    :class="{ 'rr-selected': randomSelected.includes(r.id) }"
+                  >
+                    <input type="checkbox" :value="r.id" :checked="randomSelected.includes(r.id)"
+                      @change="toggleRandomRecipe(r.id)" class="rr-cb" />
+                    <div class="rr-img">
+                      <img v-if="r.imageUrl" :src="r.imageUrl" alt="" />
+                      <span v-else>🍽️</span>
+                    </div>
+                    <div class="rr-info">
+                      <span class="rr-title">{{ r.titleUz || r.titleRu }}</span>
+                      <span class="rr-diff"
+                        :class="{ 'diff-easy': r.difficultyLevel==='EASY', 'diff-med': r.difficultyLevel==='MEDIUM', 'diff-hard': r.difficultyLevel==='HARD' }">
+                        {{ r.difficultyLevel === 'EASY' ? 'Oson' : r.difficultyLevel === 'MEDIUM' ? "O'rta" : 'Qiyin' }}
+                      </span>
+                    </div>
+                  </label>
+                  <div v-if="randomPool.length > 30" class="search-more">+{{ randomPool.length - 30 }} ta retsept ko'rinmayapti — qidiruv orqali toping</div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="modal-footer">
+              <button @click="showRandom = false" class="btn-ghost">Bekor qilish</button>
+              <button
+                @click="applyRandom"
+                :disabled="randomLoading || !Object.values(randomMeals).some(Boolean)"
+                class="btn-primary"
+              >
+                <span v-if="randomLoading" class="spinner" />
+                <span v-else>🎲 To'ldirish</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- ══════════ CONFIRM MODALS ══════════ -->
     <ConfirmModal
       :show="confirmDelete.show"
@@ -764,8 +992,8 @@ async function load() {
 
 /* ── Header ── */
 .page-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.page-title  { font-size: 22px; font-weight: 900; color: #f1f5f9; }
-.page-sub    { font-size: 13px; color: #475569; margin-top: 3px; }
+.page-title  { font-size: 22px; font-weight: 900; color: var(--tx-1); }
+.page-sub    { font-size: 13px; color: var(--tx-5); margin-top: 3px; }
 
 /* ── Buttons ── */
 .btn-primary {
@@ -793,27 +1021,28 @@ async function load() {
   justify-content: center;
   gap: 6px;
   padding: 10px 18px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-lg);
   border-radius: 12px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.09); }
+.btn-ghost:hover { background: var(--bg-input-f); }
 
 /* ── Plan card ── */
 .plans-list { display: flex; flex-direction: column; gap: 12px; }
 .plan-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
-.plan-card:hover { border-color: rgba(255,255,255,0.11); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+.plan-card:hover { border-color: var(--bd-md); box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
 
 .plan-header {
   display: flex;
@@ -825,23 +1054,23 @@ async function load() {
   user-select: none;
   transition: background 0.2s;
 }
-.plan-header:hover { background: rgba(255,255,255,0.02); }
+.plan-header:hover { background: var(--bg-card-md); }
 
 .plan-info      { flex: 1; min-width: 0; }
 .plan-name-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.plan-name      { font-size: 15px; font-weight: 800; color: #e2e8f0; }
+.plan-name      { font-size: 15px; font-weight: 800; color: var(--tx-2); }
 .plan-dates     {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #475569;
+  color: var(--tx-5);
   margin-top: 5px;
   font-weight: 600;
 }
 .date-icon      { width: 13px; height: 13px; flex-shrink: 0; }
-.dot-sep        { color: #334155; }
-.entry-count    { color: #64748b; }
+.dot-sep        { color: var(--tx-6); }
+.entry-count    { color: var(--tx-4); }
 
 /* Status badges */
 .status-badge {
@@ -851,7 +1080,7 @@ async function load() {
   font-weight: 800;
   letter-spacing: 0.03em;
 }
-.st-draft     { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.st-draft     { background: rgba(100,116,139,0.15); color: var(--tx-3); }
 .st-active    { background: rgba(216,90,48,0.15);   color: #E8713E; }
 .st-completed { background: rgba(59,130,246,0.15);  color: #60a5fa; }
 
@@ -880,7 +1109,7 @@ async function load() {
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-input);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -895,13 +1124,13 @@ async function load() {
 .btn-del  { color: #ef4444; }
 .btn-del:hover  { background: rgba(239,68,68,0.12); }
 
-.chevron svg   { width: 18px; height: 18px; color: #475569; transition: transform 0.3s; }
+.chevron svg   { width: 18px; height: 18px; color: var(--tx-5); transition: transform 0.3s; }
 .chevron-up svg { transform: rotate(180deg); }
 
 /* ── Weekly grid ── */
 .weekly-grid-wrap {
   padding: 0 16px 16px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
   overflow-x: auto;
 }
 .weekly-grid {
@@ -923,28 +1152,28 @@ async function load() {
 .day-short {
   font-size: 10px;
   font-weight: 800;
-  color: #475569;
+  color: var(--tx-5);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 .day-num {
   font-size: 18px;
   font-weight: 900;
-  color: #94a3b8;
+  color: var(--tx-3);
   line-height: 1;
 }
 .day-mon {
   font-size: 10px;
-  color: #334155;
+  color: var(--tx-6);
   font-weight: 600;
 }
 .day-add-btn {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 1px dashed rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.03);
-  color: #475569;
+  border: 1px dashed var(--bd-lg);
+  background: var(--bg-card);
+  color: var(--tx-5);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -962,8 +1191,8 @@ async function load() {
 .day-cell {
   min-height: 80px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.05);
-  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--bd);
+  background: var(--bg-card);
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -993,8 +1222,8 @@ async function load() {
 }
 .chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .entry-meal   { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
-.entry-recipe { font-size: 10px; color: #94a3b8; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.entry-servings { font-size: 9px; color: #64748b; font-weight: 600; }
+.entry-recipe { font-size: 10px; color: var(--tx-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.entry-servings { font-size: 9px; color: var(--tx-4); font-weight: 600; }
 
 .entry-del {
   position: absolute;
@@ -1028,9 +1257,9 @@ async function load() {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  border: 1px dashed rgba(255,255,255,0.08);
+  border: 1px dashed var(--bd-md);
   background: none;
-  color: #334155;
+  color: var(--tx-6);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1054,7 +1283,7 @@ async function load() {
 .skel-plan {
   height: 80px;
   border-radius: 20px;
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -1065,13 +1294,14 @@ async function load() {
   align-items: center;
   gap: 10px;
   padding: 80px 24px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .empty-icon  { font-size: 56px; margin-bottom: 8px; }
-.empty-title { font-size: 16px; font-weight: 800; color: #64748b; }
-.empty-sub   { font-size: 13px; color: #334155; }
+.empty-title { font-size: 16px; font-weight: 800; color: var(--tx-4); }
+.empty-sub   { font-size: 13px; color: var(--tx-6); }
 
 /* ══════════ MODAL ══════════ */
 .modal-overlay {
@@ -1086,8 +1316,8 @@ async function load() {
   padding: 20px;
 }
 .modal-box {
-  background: #111827;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--bd-md);
   border-radius: 24px;
   width: 100%;
   max-width: 480px;
@@ -1102,20 +1332,20 @@ async function load() {
   justify-content: space-between;
   padding: 20px 24px 0;
 }
-.modal-title  { font-size: 17px; font-weight: 900; color: #f1f5f9; }
+.modal-title  { font-size: 17px; font-weight: 900; color: var(--tx-1); }
 .modal-close {
   width: 32px; height: 32px;
   border-radius: 8px;
   border: none;
-  background: rgba(255,255,255,0.06);
-  color: #64748b;
+  background: var(--bd);
+  color: var(--tx-4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
 }
-.modal-close:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+.modal-close:hover { background: var(--bd-md); color: var(--tx-2); }
 .modal-close svg { width: 16px; height: 16px; }
 
 .modal-body {
@@ -1137,28 +1367,28 @@ async function load() {
 .form-label {
   font-size: 11px;
   font-weight: 800;
-  color: #64748b;
+  color: var(--tx-4);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.form-hint  { font-size: 11px; color: #334155; }
+.form-hint  { font-size: 11px; color: var(--tx-6); }
 .req { color: #ef4444; }
-.opt { color: #334155; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 10px; }
+.opt { color: var(--tx-6); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 10px; }
 
 .form-input {
   width: 100%;
   padding: 11px 14px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s, background 0.2s;
   box-sizing: border-box;
 }
-.form-input:focus { border-color: rgba(216,90,48,0.5); background: rgba(255,255,255,0.07); }
-.form-input option { background: #1e293b; }
+.form-input:focus { border-color: rgba(216,90,48,0.5); background: var(--bg-input-f); }
+.form-input option { background: var(--bg-surface); }
 .form-textarea { resize: none; line-height: 1.5; }
 
 /* Selected recipe pill */
@@ -1180,14 +1410,14 @@ async function load() {
 .sr-thumb-placeholder {
   width: 36px; height: 36px;
   border-radius: 8px;
-  background: rgba(255,255,255,0.06);
+  background: var(--bd);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
   flex-shrink: 0;
 }
-.sr-name { flex: 1; font-size: 13px; font-weight: 700; color: #e2e8f0; }
+.sr-name { flex: 1; font-size: 13px; font-weight: 700; color: var(--tx-2); }
 .sr-clear {
   width: 22px; height: 22px;
   border: none;
@@ -1210,29 +1440,29 @@ async function load() {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
   padding: 0 12px;
   height: 44px;
   transition: border-color 0.2s;
 }
 .search-field:focus-within { border-color: rgba(216,90,48,0.5); }
-.sf-icon  { width: 16px; height: 16px; color: #475569; flex-shrink: 0; }
+.sf-icon  { width: 16px; height: 16px; color: var(--tx-5); flex-shrink: 0; }
 .sf-input {
   flex: 1;
   background: none;
   border: none;
   outline: none;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--tx-2);
 }
-.sf-input::placeholder { color: #334155; }
+.sf-input::placeholder { color: var(--tx-6); }
 .sf-count {
   font-size: 11px;
   font-weight: 700;
-  color: #475569;
-  background: rgba(255,255,255,0.06);
+  color: var(--tx-5);
+  background: var(--bd);
   padding: 2px 7px;
   border-radius: 6px;
 }
@@ -1242,8 +1472,8 @@ async function load() {
   top: calc(100% + 6px);
   left: 0;
   right: 0;
-  background: #1a2234;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--bd-md);
   border-radius: 14px;
   overflow: hidden;
   z-index: 10;
@@ -1261,16 +1491,16 @@ async function load() {
   cursor: pointer;
   width: 100%;
   text-align: left;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--bd);
   transition: background 0.15s;
 }
 .search-result:last-child { border-bottom: none; }
-.search-result:hover { background: rgba(255,255,255,0.04); }
+.search-result:hover { background: var(--bg-card-md); }
 .sr-img {
   width: 36px; height: 36px;
   border-radius: 8px;
   overflow: hidden;
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-input);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1279,10 +1509,10 @@ async function load() {
 }
 .sr-img img { width: 100%; height: 100%; object-fit: cover; }
 .sr-info { display: flex; flex-direction: column; gap: 2px; }
-.sr-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
-.sr-meta  { font-size: 11px; color: #475569; }
-.search-more  { padding: 8px 12px; font-size: 11px; color: #475569; text-align: center; border-top: 1px solid rgba(255,255,255,0.04); }
-.search-empty { padding: 16px 12px; font-size: 13px; color: #475569; text-align: center; }
+.sr-title { font-size: 13px; font-weight: 700; color: var(--tx-2); }
+.sr-meta  { font-size: 11px; color: var(--tx-5); }
+.search-more  { padding: 8px 12px; font-size: 11px; color: var(--tx-5); text-align: center; border-top: 1px solid var(--bd); }
+.search-empty { padding: 16px 12px; font-size: 13px; color: var(--tx-5); text-align: center; }
 
 /* Meal preview pill */
 .meal-preview {
@@ -1308,9 +1538,9 @@ async function load() {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
-  color: #e2e8f0;
+  border: 1px solid var(--bd-lg);
+  background: var(--bg-input);
+  color: var(--tx-2);
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
@@ -1321,8 +1551,8 @@ async function load() {
 }
 .srv-btn:hover:not(:disabled) { background: rgba(216,90,48,0.12); border-color: rgba(216,90,48,0.3); color: #E8713E; }
 .srv-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.srv-val   { font-size: 20px; font-weight: 900; color: #e2e8f0; min-width: 28px; text-align: center; }
-.srv-label { font-size: 12px; color: #475569; font-weight: 600; }
+.srv-val   { font-size: 20px; font-weight: 900; color: var(--tx-2); min-width: 28px; text-align: center; }
+.srv-label { font-size: 12px; color: var(--tx-5); font-weight: 600; }
 
 /* Error box */
 .modal-error {
@@ -1359,4 +1589,120 @@ async function load() {
 
 @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 @keyframes spin  { to { transform: rotate(360deg); } }
+
+/* ── Random button ── */
+.btn-random {
+  font-size: 16px;
+  color: #a855f7;
+  background: rgba(168,85,247,0.1);
+}
+.btn-random:hover { background: rgba(168,85,247,0.2); }
+
+/* ── Random modal ── */
+.modal-box--random { max-width: 560px; }
+
+.random-info {
+  background: rgba(216,90,48,0.06);
+  border: 1px solid rgba(216,90,48,0.15);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ri-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--tx-4);
+  font-weight: 600;
+}
+.ri-badge {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.ri-breakfast { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.ri-snack     { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.ri-lunch     { background: rgba(34,197,94,0.12);  color: #4ade80; }
+
+/* Meal type checkboxes */
+.meal-type-checks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mt-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bd);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: all 0.2s;
+  user-select: none;
+}
+.mt-cb { display: none; }
+.mt-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* Only empty checkbox */
+.only-empty-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tx-4);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.only-empty-check input { width: 15px; height: 15px; accent-color: #E8713E; cursor: pointer; }
+
+/* Recipe list */
+.random-recipe-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.rr-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--bd);
+  transition: background 0.15s;
+  user-select: none;
+}
+.rr-item:last-child { border-bottom: none; }
+.rr-item:hover { background: var(--bg-card-md); }
+.rr-selected { background: rgba(216,90,48,0.07); }
+.rr-cb { width: 15px; height: 15px; accent-color: #E8713E; flex-shrink: 0; cursor: pointer; }
+.rr-img {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.rr-img img { width: 100%; height: 100%; object-fit: cover; }
+.rr-info { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rr-title { font-size: 12px; font-weight: 700; color: var(--tx-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.rr-diff  { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
+.diff-easy { background: rgba(34,197,94,0.12); color: #4ade80; }
+.diff-med  { background: rgba(245,158,11,0.12); color: #fbbf24; }
+.diff-hard { background: rgba(239,68,68,0.12);  color: #f87171; }
 </style>

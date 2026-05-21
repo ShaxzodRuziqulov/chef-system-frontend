@@ -7,7 +7,7 @@ export type Role = 'USER' | 'ADMIN'
 // POST /api/auth/register → ApiResponse<AuthResponse>
 export interface RegisterRequest {
   username: string
-  email:    string
+  email?:   string   // ixtiyoriy — backend avtomatik generatsiya qiladi
   password: string
   fullName?: string
 }

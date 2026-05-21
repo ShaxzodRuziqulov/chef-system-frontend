@@ -49,8 +49,8 @@ const emit = defineEmits<{
 }
 
 .box {
-  background: #111827;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--bd-md);
   border-radius: 20px;
   padding: 28px 24px 24px;
   max-width: 360px;
@@ -75,7 +75,7 @@ const emit = defineEmits<{
 .msg {
   font-size: 14px;
   font-weight: 600;
-  color: #cbd5e1;
+  color: var(--tx-2);
   line-height: 1.5;
   margin-bottom: 24px;
 }
@@ -88,16 +88,16 @@ const emit = defineEmits<{
 
 .btn-cancel {
   padding: 11px 16px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-lg);
   border-radius: 12px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-cancel:hover { background: rgba(255,255,255,0.1); }
+.btn-cancel:hover { background: var(--bg-input-f); }
 
 .btn-confirm {
   padding: 11px 16px;

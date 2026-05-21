@@ -143,8 +143,8 @@ onMounted(async () => {
 .hero {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(135deg, #0a2a16 0%, #0d1f2d 60%, #0f172a 100%);
-  border: 1px solid rgba(216, 90, 48, 0.15);
+  background: linear-gradient(135deg, #0a2a16 0%, #0d1f2d 65%, #112032 100%);
+  border: 1px solid rgba(216, 90, 48, 0.2);
   border-radius: 24px;
   padding: 40px;
   display: flex;
@@ -186,7 +186,7 @@ onMounted(async () => {
 }
 .hero-sub {
   font-size: 15px;
-  color: #64748b;
+  color: #94a3b8;
   margin-bottom: 24px;
   line-height: 1.6;
 }
@@ -213,16 +213,16 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 12px 22px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #cbd5e1;
   font-size: 14px;
   font-weight: 700;
   border-radius: 12px;
   text-decoration: none;
   transition: background 0.2s, color 0.2s;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+.btn-ghost:hover { background: rgba(255,255,255,0.14); color: #f1f5f9; }
 
 .hero-emoji {
   font-size: 100px;
@@ -245,22 +245,23 @@ onMounted(async () => {
   gap: 14px;
 }
 .stat-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 16px;
   padding: 20px 16px;
   display: flex;
   align-items: center;
   gap: 14px;
-  transition: border-color 0.2s, background 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 .stat-card:hover {
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-card-lg);
   border-color: rgba(216,90,48,0.2);
 }
 .stat-icon { font-size: 28px; line-height: 1; }
-.stat-num { font-size: 22px; font-weight: 900; color: #f1f5f9; line-height: 1.1; }
-.stat-label { font-size: 11px; font-weight: 600; color: #475569; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+.stat-num { font-size: 22px; font-weight: 900; color: var(--tx-1); line-height: 1.1; }
+.stat-label { font-size: 11px; font-weight: 600; color: var(--tx-5); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 @media (max-width: 768px) {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -273,7 +274,7 @@ onMounted(async () => {
 /* ── Section ── */
 .section { display: flex; flex-direction: column; gap: 16px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; }
-.section-title { font-size: 18px; font-weight: 800; color: #e2e8f0; }
+.section-title { font-size: 18px; font-weight: 800; color: var(--tx-2); }
 .section-link { font-size: 13px; font-weight: 700; color: #E8713E; text-decoration: none; transition: color 0.2s; }
 .section-link:hover { color: #F0997B; }
 
@@ -296,8 +297,8 @@ onMounted(async () => {
   padding: 12px 10px;
   width: 78px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   text-decoration: none;
   transition: border-color 0.2s, background 0.2s, transform 0.2s;
 }
@@ -319,7 +320,7 @@ onMounted(async () => {
   border-color: rgba(216,90,48,0.35);
   transform: scale(1.05);
 }
-.cat-name { font-size: 10px; font-weight: 700; color: #64748b; text-align: center; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cat-name { font-size: 10px; font-weight: 700; color: var(--tx-4); text-align: center; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .cat-item:hover .cat-name { color: #E8713E; }
 
 .cat-skeleton {
@@ -327,7 +328,7 @@ onMounted(async () => {
   width: 78px;
   height: 88px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-input);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -340,24 +341,24 @@ onMounted(async () => {
 .recipe-skeleton {
   border-radius: 16px;
   height: 220px;
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
 @media (max-width: 1024px) { .recipe-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px)  { .recipe-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Empty ── */
-.empty-sm { font-size: 13px; color: #475569; padding: 12px 4px; }
+.empty-sm { font-size: 13px; color: var(--tx-5); padding: 12px 4px; }
 .empty-card {
   text-align: center;
   padding: 60px 24px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
 }
 .empty-icon { font-size: 48px; margin-bottom: 14px; }
-.empty-title { font-size: 16px; font-weight: 700; color: #475569; margin-bottom: 6px; }
-.empty-sub { font-size: 13px; color: #334155; }
+.empty-title { font-size: 16px; font-weight: 700; color: var(--tx-5); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; color: var(--tx-6); }
 
 /* ── Pulse animation ── */
 @keyframes pulse {

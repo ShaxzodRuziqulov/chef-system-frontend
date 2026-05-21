@@ -32,7 +32,7 @@ onMounted(() => {
 <style scoped>
 .layout {
   min-height: 100vh;
-  background: #0f172a;
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
 }

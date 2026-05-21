@@ -17,7 +17,6 @@ const redirectPath = computed(() =>
 const schema = yup.object({
   fullName: yup.string().optional().max(80, 'Ism juda uzun'),
   username: yup.string().required("Username kiritilishi shart").min(3, 'Kamida 3 ta belgi').max(30).matches(/^[a-zA-Z0-9_]+$/, "Faqat harf, raqam va _ belgisi"),
-  email:    yup.string().required("Email kiritilishi shart").email("To'g'ri email manzil kiriting"),
   password: yup.string().required("Parol kiritilishi shart").min(4, 'Kamida 4 ta belgi'),
 })
 
@@ -25,7 +24,6 @@ const { handleSubmit, meta } = useForm({ validationSchema: schema })
 
 const { value: fullName, errorMessage: fullNameError, meta: fullNameMeta } = useField<string>('fullName')
 const { value: username, errorMessage: usernameError, meta: usernameMeta } = useField<string>('username')
-const { value: email,    errorMessage: emailError,    meta: emailMeta    } = useField<string>('email')
 const { value: password, errorMessage: passwordError, meta: passwordMeta } = useField<string>('password')
 
 const showPassword = ref(false)
@@ -36,7 +34,6 @@ const onSubmit = handleSubmit(async (values) => {
   const error = await auth.register({
     fullName: values.fullName ?? '',
     username: values.username,
-    email:    values.email,
     password: values.password,
   }, redirectPath.value)
   if (error) serverError.value = error
@@ -88,21 +85,6 @@ onMounted(() => { auth.clearError(); serverError.value = null })
             </svg>
           </div>
           <span v-if="usernameError && usernameMeta.dirty" class="error-msg">{{ usernameError }}</span>
-        </div>
-
-        <!-- Email -->
-        <div class="field-group">
-          <label class="field-label">Email <span class="required">*</span></label>
-          <div class="input-wrap" :class="{ 'is-error': emailError && emailMeta.dirty, 'is-valid': emailMeta.valid && email }">
-            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-            </svg>
-            <input v-model="email" type="email" placeholder="ali@example.com" class="field-input" />
-            <svg v-if="emailMeta.valid && email" class="valid-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-            </svg>
-          </div>
-          <span v-if="emailError && emailMeta.dirty" class="error-msg">{{ emailError }}</span>
         </div>
 
         <!-- Password -->
@@ -159,7 +141,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background-color: #0f172a;
+  background-color: var(--bg-base);
   position: relative;
   overflow: hidden;
 }
@@ -187,8 +169,8 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   z-index: 10;
   width: 100%;
   max-width: 480px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd-md);
   border-radius: 32px;
   padding: 44px 40px;
   backdrop-filter: blur(40px);
@@ -224,14 +206,14 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   text-align: center;
   font-size: 24px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--tx-1);
   letter-spacing: -0.3px;
   margin-bottom: 6px;
 }
 .subtitle {
   text-align: center;
   font-size: 14px;
-  color: #64748b;
+  color: var(--tx-4);
   margin-bottom: 28px;
   line-height: 1.5;
 }
@@ -254,7 +236,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #475569;
+  color: var(--tx-5);
 }
 .optional {
   font-weight: 400;
@@ -269,15 +251,15 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-input);
+  border: 1.5px solid var(--bd-md);
   border-radius: 12px;
   padding: 0 14px;
   height: 52px;
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 .input-wrap:focus-within {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-input-f);
   border-color: rgba(216, 90, 48, 0.6);
   box-shadow: 0 0 0 3px rgba(216, 90, 48, 0.1);
 }
@@ -293,7 +275,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: #334155;
+  color: var(--tx-6);
   transition: color 0.2s;
 }
 .input-wrap:focus-within .input-icon { color: #E8713E; }
@@ -304,10 +286,10 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   border: none;
   outline: none;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   min-width: 0;
 }
-.field-input::placeholder { color: #475569; }
+.field-input::placeholder { color: var(--tx-5); }
 
 .valid-icon {
   width: 16px;
@@ -323,11 +305,11 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   padding: 0;
   display: flex;
   align-items: center;
-  color: #334155;
+  color: var(--tx-6);
   transition: color 0.2s;
   flex-shrink: 0;
 }
-.toggle-btn:hover { color: #e2e8f0; }
+.toggle-btn:hover { color: var(--tx-2); }
 .toggle-btn svg { width: 18px; height: 18px; }
 
 /* ── Error msg ── */
@@ -397,12 +379,12 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
   padding-top: 20px;
 }
 .card-footer p {
   font-size: 13px;
-  color: #475569;
+  color: var(--tx-5);
   font-weight: 500;
 }
 .card-footer p a {
@@ -414,7 +396,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
 .card-footer p a:hover { color: #F0997B; }
 .card-footer span {
   font-size: 10px;
-  color: #1e293b;
+  color: var(--tx-6);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 700;

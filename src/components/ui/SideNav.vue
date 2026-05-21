@@ -11,14 +11,17 @@ const route = useRoute()
 const auth  = useAuthStore()
 const lang  = useLangStore()
 
-const nav = computed(() => [
-  { name: lang.t('nav.home'),      icon: 'home',     to: '/app' },
-  { name: lang.t('nav.recipes'),   icon: 'recipes',  to: '/app/recipes' },
-  { name: 'Sevimlilar',            icon: 'heart',    to: '/app/saved' },
-  { name: lang.t('nav.meal_plan'), icon: 'calendar', to: '/app/meal-plans' },
-  { name: lang.t('nav.shopping'),  icon: 'cart',     to: '/app/shopping-lists' },
-  { name: lang.t('nav.profile'),   icon: 'user',     to: '/app/profile' },
-])
+const nav = computed(() => {
+  void lang.lang  // lang o'zgarganda computed qayta hisoblansin
+  return [
+    { name: lang.t('nav.home'),      icon: 'home',     to: '/app' },
+    { name: lang.t('nav.recipes'),   icon: 'recipes',  to: '/app/recipes' },
+    { name: lang.t('nav.saved'),     icon: 'heart',    to: '/app/saved' },
+    { name: lang.t('nav.meal_plan'), icon: 'calendar', to: '/app/meal-plans' },
+    { name: lang.t('nav.shopping'),  icon: 'cart',     to: '/app/shopping-lists' },
+    { name: lang.t('nav.profile'),   icon: 'user',     to: '/app/profile' },
+  ]
+})
 
 const isActive = (to) =>
   to === '/app' ? route.path === '/app' : route.path.startsWith(to)
@@ -99,8 +102,8 @@ const isActive = (to) =>
   left: 0;
   height: 100%;
   width: 260px;
-  background: #0d1526;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--bd);
   display: flex;
   flex-direction: column;
   z-index: 30;
@@ -119,7 +122,7 @@ const isActive = (to) =>
   align-items: center;
   gap: 12px;
   padding: 20px 20px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--bd);
 }
 .logo-icon {
   width: 44px;
@@ -134,7 +137,7 @@ const isActive = (to) =>
   box-shadow: 0 4px 12px rgba(216, 90, 48, 0.3);
 }
 .logo-text { display: flex; flex-direction: column; }
-.logo-name { font-size: 15px; font-weight: 800; color: #f1f5f9; }
+.logo-name { font-size: 15px; font-weight: 800; color: var(--tx-1); }
 .logo-sub  { font-size: 10px; font-weight: 700; color: #E8713E; letter-spacing: 0.1em; text-transform: uppercase; }
 
 /* Nav */
@@ -154,15 +157,15 @@ const isActive = (to) =>
   padding: 11px 12px;
   border-radius: 12px;
   text-decoration: none;
-  color: #64748b;
+  color: var(--tx-4);
   font-size: 14px;
   font-weight: 600;
   transition: background 0.2s, color 0.2s;
   position: relative;
 }
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #cbd5e1;
+  background: var(--bg-input);
+  color: var(--tx-2);
 }
 .nav-item-active {
   background: rgba(216, 90, 48, 0.12);
@@ -189,7 +192,7 @@ const isActive = (to) =>
 /* Footer */
 .sidebar-footer {
   padding: 12px 10px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--bd);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -200,9 +203,9 @@ const isActive = (to) =>
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-card-md);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--bd);
 }
 .user-avatar {
   width: 36px;
@@ -218,7 +221,7 @@ const isActive = (to) =>
   flex-shrink: 0;
 }
 .user-info { display: flex; flex-direction: column; min-width: 0; }
-.user-name { font-size: 13px; font-weight: 700; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-name { font-size: 13px; font-weight: 700; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-role { font-size: 10px; font-weight: 600; color: #E8713E; text-transform: uppercase; letter-spacing: 0.08em; }
 
 .logout-btn {

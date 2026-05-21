@@ -214,8 +214,8 @@ watch(() => route.query.keyword, (kw) => {
 
 /* Header */
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; }
-.page-title  { font-size: 22px; font-weight: 900; color: #f1f5f9; }
-.page-sub    { font-size: 13px; color: #475569; margin-top: 3px; }
+.page-title  { font-size: 22px; font-weight: 900; color: var(--tx-1); }
+.page-sub    { font-size: 13px; color: var(--tx-5); margin-top: 3px; }
 
 /* Filters */
 .filters-bar {
@@ -223,9 +223,10 @@ watch(() => route.query.keyword, (kw) => {
   flex-wrap: wrap;
   gap: 10px;
   padding: 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .search-wrap {
@@ -234,8 +235,8 @@ watch(() => route.query.keyword, (kw) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
   padding: 0 12px;
   height: 42px;
@@ -243,23 +244,23 @@ watch(() => route.query.keyword, (kw) => {
 }
 .search-wrap:focus-within {
   border-color: rgba(216, 90, 48, 0.5);
-  background: rgba(255,255,255,0.07);
+  background: var(--bg-input-f);
 }
-.si { width: 16px; height: 16px; color: #475569; flex-shrink: 0; }
+.si { width: 16px; height: 16px; color: var(--tx-5); flex-shrink: 0; }
 .search-input {
   flex: 1;
   background: none;
   border: none;
   outline: none;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   min-width: 0;
 }
-.search-input::placeholder { color: #334155; }
+.search-input::placeholder { color: var(--tx-6); }
 .clear-btn {
   background: none;
   border: none;
-  color: #475569;
+  color: var(--tx-5);
   cursor: pointer;
   font-size: 12px;
   padding: 2px 4px;
@@ -267,15 +268,15 @@ watch(() => route.query.keyword, (kw) => {
   line-height: 1;
   transition: color 0.2s;
 }
-.clear-btn:hover { color: #94a3b8; }
+.clear-btn:hover { color: var(--tx-3); }
 
 .filter-select {
   height: 42px;
   padding: 0 12px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -283,7 +284,7 @@ watch(() => route.query.keyword, (kw) => {
   transition: border-color 0.2s;
 }
 .filter-select:focus  { border-color: rgba(216,90,48,0.5); }
-.filter-select option { background: #1e293b; color: #e2e8f0; }
+.filter-select option { background: var(--bg-surface); color: var(--tx-2); }
 
 .reset-btn {
   display: flex;
@@ -316,7 +317,7 @@ watch(() => route.query.keyword, (kw) => {
 .skeleton-card {
   border-radius: 20px;
   height: 220px;
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -326,14 +327,15 @@ watch(() => route.query.keyword, (kw) => {
   flex-direction: column;
   align-items: center;
   padding: 80px 24px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 24px;
   gap: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .empty-icon   { font-size: 56px; margin-bottom: 8px; }
-.empty-title  { font-size: 16px; font-weight: 800; color: #64748b; }
-.empty-sub    { font-size: 13px; color: #334155; }
+.empty-title  { font-size: 16px; font-weight: 800; color: var(--tx-4); }
+.empty-sub    { font-size: 13px; color: var(--tx-6); }
 .empty-action {
   margin-top: 8px;
   padding: 10px 22px;
@@ -361,9 +363,9 @@ watch(() => route.query.keyword, (kw) => {
   height: 38px;
   padding: 0 6px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
-  color: #64748b;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md);
+  color: var(--tx-4);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;

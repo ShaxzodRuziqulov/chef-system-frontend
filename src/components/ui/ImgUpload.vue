@@ -87,9 +87,9 @@ function clear() { emit('update:modelValue', '') }
 /* Empty / upload state */
 .iu-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  background: rgba(255,255,255,0.04);
-  border: 2px dashed rgba(255,255,255,0.1);
-  color: #475569; cursor: pointer;
+  background: var(--bg-input);
+  border: 2px dashed var(--bd-xl);
+  color: var(--tx-5); cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
 .iu-empty:not(.iu-loading):hover {

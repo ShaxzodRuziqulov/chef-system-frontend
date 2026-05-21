@@ -41,7 +41,7 @@ function toggleFav(e) {
       <span v-if="recipe.difficultyLevel" class="badge-diff" :class="diffMap[recipe.difficultyLevel]?.cls">
         {{ diffMap[recipe.difficultyLevel]?.label }}
       </span>
-      <span v-if="recipe.categoryNameUz" class="badge-cat">{{ recipe.categoryNameUz }}</span>
+      <span v-if="recipe.categoryNameUz" class="badge-cat">{{ lang.catName(recipe) }}</span>
 
       <!-- Heart button -->
       <button
@@ -77,18 +77,19 @@ function toggleFav(e) {
 .recipe-card {
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
   overflow: hidden;
   text-decoration: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   cursor: pointer;
 }
 .recipe-card:hover {
   transform: translateY(-3px);
   border-color: rgba(216, 90, 48, 0.25);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
 }
 
 /* Image */
@@ -193,7 +194,7 @@ function toggleFav(e) {
 .card-title {
   font-size: 13px;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--tx-2);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -207,7 +208,7 @@ function toggleFav(e) {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #475569;
+  color: var(--tx-5);
   font-weight: 600;
 }
 .card-rating {

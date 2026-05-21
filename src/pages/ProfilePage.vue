@@ -117,11 +117,11 @@ async function savePassword() {
   pwError.value   = ''
   pwSuccess.value = false
   if (pwForm.value.newPassword !== pwForm.value.confirmPassword) {
-    pwError.value = 'Yangi parollar mos kelmadi'
+    pwError.value = lang.t('profile.pw_mismatch')
     return
   }
   if (pwForm.value.newPassword.length < 6) {
-    pwError.value = 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak'
+    pwError.value = lang.t('profile.pw_short')
     return
   }
   pwSaving.value = true
@@ -363,7 +363,7 @@ const stats = [
                 </div>
                 <div class="au-hint">
                   <span v-if="avatarUploading">Yuklanmoqda...</span>
-                  <span v-else>Rasm o'zgartirish uchun bosing</span>
+                  <span v-else>{{ lang.t('profile.avatar_hint') }}</span>
                   <span class="au-size">JPG, PNG, WEBP · max 5 MB</span>
                 </div>
                 <input ref="avatarInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif"
@@ -374,38 +374,38 @@ const stats = [
               <div class="form-group">
                 <label class="form-label">{{ lang.t('profile.full_name') }}</label>
                 <input v-model="editForm.fullName" type="text" class="form-input"
-                  :placeholder="auth.user?.fullName || 'Ism familiya'" />
+                  :placeholder="auth.user?.fullName || lang.t('profile.name_ph')" />
               </div>
 
               <div v-if="saveError" class="modal-error">{{ saveError }}</div>
-              <div v-if="saveSuccess" class="modal-success">✅ Muvaffaqiyatli saqlandi!</div>
+              <div v-if="saveSuccess" class="modal-success">{{ lang.t('profile.saved_ok') }}</div>
 
               <!-- Password change section -->
               <div class="pw-section">
                 <button class="pw-toggle" @click="showPwForm = !showPwForm" type="button">
-                  🔒 Parolni o'zgartirish
+                  {{ lang.t('profile.pw_change') }}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" :style="{ transform: showPwForm ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                   </svg>
                 </button>
                 <div v-if="showPwForm" class="pw-form">
                   <div class="form-group">
-                    <label class="form-label">Joriy parol</label>
+                    <label class="form-label">{{ lang.t('profile.pw_current') }}</label>
                     <input v-model="pwForm.currentPassword" type="password" class="form-input" placeholder="••••••" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Yangi parol</label>
+                    <label class="form-label">{{ lang.t('profile.pw_new') }}</label>
                     <input v-model="pwForm.newPassword" type="password" class="form-input" placeholder="••••••" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Yangi parolni tasdiqlang</label>
+                    <label class="form-label">{{ lang.t('profile.pw_confirm') }}</label>
                     <input v-model="pwForm.confirmPassword" type="password" class="form-input" placeholder="••••••" />
                   </div>
                   <div v-if="pwError" class="modal-error">{{ pwError }}</div>
-                  <div v-if="pwSuccess" class="modal-success">✅ Parol muvaffaqiyatli o'zgartirildi!</div>
+                  <div v-if="pwSuccess" class="modal-success">{{ lang.t('profile.pw_saved') }}</div>
                   <button @click="savePassword" class="btn-save-pw" :disabled="pwSaving" type="button">
                     <span v-if="pwSaving" class="btn-spinner"></span>
-                    <span>{{ pwSaving ? 'Saqlanmoqda...' : 'Parolni saqlash' }}</span>
+                    <span>{{ pwSaving ? lang.t('profile.pw_saving') : lang.t('profile.pw_save') }}</span>
                   </button>
                 </div>
               </div>
@@ -432,16 +432,17 @@ const stats = [
 
 /* ── Profile card ── */
 .profile-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 24px;
   overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
 }
 
 .cover {
   position: relative;
   height: 120px;
-  background: linear-gradient(135deg, #0a2a16 0%, #0f2d1f 50%, #0d1526 100%);
+  background: linear-gradient(135deg, #0a2a16 0%, #0f2d1f 50%, #112032 100%);
   overflow: hidden;
 }
 .cover-blob {
@@ -468,7 +469,7 @@ const stats = [
   height: 84px;
   border-radius: 20px;
   background: linear-gradient(135deg, #D85A30, #E8713E);
-  border: 4px solid #0f172a;
+  border: 4px solid var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -486,7 +487,7 @@ const stats = [
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  border: 3px solid #0f172a;
+  border: 3px solid var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,7 +496,7 @@ const stats = [
 .badge-admin { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .badge-user  { background: linear-gradient(135deg, #3b82f6, #6366f1); }
 
-.profile-name { font-size: 22px; font-weight: 900; color: #f1f5f9; }
+.profile-name { font-size: 22px; font-weight: 900; color: var(--tx-1); }
 .profile-role { font-size: 13px; color: #E8713E; font-weight: 700; margin-top: 3px; }
 
 /* Stats */
@@ -503,8 +504,8 @@ const stats = [
   display: flex;
   gap: 0;
   margin-top: 20px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
+  border-bottom: 1px solid var(--bd);
 }
 .stat-item {
   flex: 1;
@@ -513,12 +514,12 @@ const stats = [
   align-items: center;
   gap: 4px;
   padding: 16px 8px;
-  border-right: 1px solid rgba(255,255,255,0.06);
+  border-right: 1px solid var(--bd);
 }
 .stat-item:last-child { border-right: none; }
 .stat-icon { font-size: 20px; }
-.stat-val  { font-size: 18px; font-weight: 900; color: #f1f5f9; }
-.stat-lbl  { font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; }
+.stat-val  { font-size: 18px; font-weight: 900; color: var(--tx-1); }
+.stat-lbl  { font-size: 10px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; }
 
 /* Actions */
 .profile-actions { display: flex; gap: 10px; margin-top: 20px; }
@@ -529,16 +530,16 @@ const stats = [
   justify-content: center;
   gap: 8px;
   padding: 11px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 14px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
-.btn-edit:hover { background: rgba(255,255,255,0.09); color: #e2e8f0; }
+.btn-edit:hover { background: var(--bd-md); color: var(--tx-1); }
 .btn-edit svg { width: 16px; height: 16px; }
 
 .btn-logout {
@@ -561,24 +562,25 @@ const stats = [
 
 /* ── Info card ── */
 .info-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
   overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
 }
 .info-row {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--bd);
 }
 .info-row:last-child { border-bottom: none; }
 .ir-icon {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-input);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -586,8 +588,8 @@ const stats = [
   flex-shrink: 0;
 }
 .ir-body   { flex: 1; }
-.ir-label  { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-.ir-val    { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+.ir-label  { font-size: 11px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+.ir-val    { font-size: 14px; font-weight: 700; color: var(--tx-2); }
 
 .role-badge {
   display: inline-block;
@@ -602,7 +604,7 @@ const stats = [
 /* ── Recipes section ── */
 .section { display: flex; flex-direction: column; gap: 14px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; }
-.section-title  { font-size: 17px; font-weight: 900; color: #e2e8f0; }
+.section-title  { font-size: 17px; font-weight: 900; color: var(--tx-1); }
 .section-link   { font-size: 13px; font-weight: 700; color: #E8713E; text-decoration: none; }
 .section-link:hover { color: #F0997B; }
 
@@ -675,13 +677,13 @@ const stats = [
   align-items: center;
   gap: 8px;
   padding: 56px 24px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
 }
 .er-icon  { font-size: 44px; margin-bottom: 4px; }
-.er-title { font-size: 15px; font-weight: 800; color: #64748b; }
-.er-sub   { font-size: 12px; color: #334155; }
+.er-title { font-size: 15px; font-weight: 800; color: var(--tx-4); }
+.er-sub   { font-size: 12px; color: var(--tx-6); }
 .btn-create-recipe {
   margin-top: 6px;
   padding: 10px 20px;
@@ -698,13 +700,13 @@ const stats = [
 
 /* ── Skeleton ── */
 .skeleton-wrap { display: flex; flex-direction: column; gap: 16px; }
-.skel-cover   { height: 120px; border-radius: 24px 24px 0 0; background: rgba(255,255,255,0.06); animation: pulse 1.5s ease-in-out infinite; }
+.skel-cover   { height: 120px; border-radius: 24px 24px 0 0; background: var(--bd-md); animation: pulse 1.5s ease-in-out infinite; }
 .skel-body    { padding: 0 28px; display: flex; flex-direction: column; gap: 8px; }
-.skel-avatar  { width: 84px; height: 84px; border-radius: 20px; background: rgba(255,255,255,0.06); margin-top: -42px; animation: pulse 1.5s ease-in-out infinite; }
-.skel-name    { height: 24px; width: 200px; border-radius: 8px; background: rgba(255,255,255,0.05); animation: pulse 1.5s ease-in-out infinite; }
-.skel-sub     { height: 16px; width: 120px; border-radius: 6px; background: rgba(255,255,255,0.04); animation: pulse 1.5s ease-in-out infinite; }
+.skel-avatar  { width: 84px; height: 84px; border-radius: 20px; background: var(--bd-md); margin-top: -42px; animation: pulse 1.5s ease-in-out infinite; }
+.skel-name    { height: 24px; width: 200px; border-radius: 8px; background: var(--bd); animation: pulse 1.5s ease-in-out infinite; }
+.skel-sub     { height: 16px; width: 120px; border-radius: 6px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
 .skel-grid    { }
-.skel-recipe  { height: 200px; border-radius: 20px; background: rgba(255,255,255,0.04); animation: pulse 1.5s ease-in-out infinite; }
+.skel-recipe  { height: 200px; border-radius: 20px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
 
 /* ── Avatar Upload ── */
 .avatar-upload-wrap {
@@ -712,8 +714,8 @@ const stats = [
   align-items: center;
   gap: 16px;
   padding: 16px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 16px;
 }
 .avatar-upload {
@@ -769,9 +771,9 @@ const stats = [
   gap: 4px;
   font-size: 13px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--tx-3);
 }
-.au-size { font-size: 11px; color: #475569; font-weight: 500; }
+.au-size { font-size: 11px; color: var(--tx-5); font-weight: 500; }
 
 /* ── Modal ── */
 .modal-overlay {
@@ -786,12 +788,12 @@ const stats = [
   padding: 20px;
 }
 .modal-box {
-  background: #111827;
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-surface);
+  border: 1px solid var(--bd-md);
   border-radius: 24px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+  box-shadow: 0 40px 80px rgba(0,0,0,0.4);
   overflow: hidden;
 }
 .modal-header {
@@ -800,21 +802,21 @@ const stats = [
   justify-content: space-between;
   padding: 20px 24px 0;
 }
-.modal-title { font-size: 17px; font-weight: 900; color: #f1f5f9; }
+.modal-title { font-size: 17px; font-weight: 900; color: var(--tx-1); }
 .modal-close {
   width: 32px;
   height: 32px;
   border-radius: 8px;
   border: none;
-  background: rgba(255,255,255,0.06);
-  color: #64748b;
+  background: var(--bg-input);
+  color: var(--tx-4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
 }
-.modal-close:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+.modal-close:hover { background: var(--bd-md); color: var(--tx-1); }
 .modal-close svg { width: 16px; height: 16px; }
 
 .modal-body {
@@ -831,14 +833,14 @@ const stats = [
 .modal-footer > * { flex: 1; justify-content: center; }
 
 .form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
+.form-label { font-size: 11px; font-weight: 800; color: var(--tx-4); text-transform: uppercase; letter-spacing: 0.08em; }
 .form-input {
   width: 100%;
   padding: 11px 14px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
@@ -848,7 +850,7 @@ const stats = [
 
 /* Password section */
 .pw-section {
-  border: 1px solid rgba(255,255,255,0.07);
+  border: 1px solid var(--bd-md);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -859,23 +861,23 @@ const stats = [
   justify-content: space-between;
   gap: 8px;
   padding: 11px 14px;
-  background: rgba(255,255,255,0.03);
+  background: var(--bg-input);
   border: none;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
   text-align: left;
 }
-.pw-toggle:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.pw-toggle:hover { background: var(--bd-md); color: var(--tx-1); }
 .pw-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
 .pw-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
 }
 .btn-save-pw {
   display: inline-flex;
@@ -934,16 +936,16 @@ const stats = [
   align-items: center;
   justify-content: center;
   padding: 11px 18px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-xl);
   border-radius: 12px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.09); }
+.btn-ghost:hover { background: var(--bd); }
 
 .btn-save {
   display: inline-flex;

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { favoritesApi }          from '@/api/favorites'
 import { useFavoritesStore }     from '@/stores/favoritesStore'
 import { useLangStore }          from '@/stores/langStore'
@@ -8,6 +8,7 @@ import RecipeCard                from '@/components/recipe/RecipeCard.vue'
 const lang      = useLangStore()
 const favorites = useFavoritesStore()
 
+
 // ── State ──────────────────────────────────────────────────────────
 const recipes   = ref([])
 const loading   = ref(false)
@@ -15,6 +16,14 @@ const page      = ref(0)
 const totalPages = ref(0)
 const total     = ref(0)
 const PAGE_SIZE = 12
+
+// ── Reaktiv tarjima (til o'zgarganda yangilanadi) ──────────────────
+const subText = computed(() => {
+  void lang.lang   // explicitly track lang changes → computed re-runs on language switch
+  return total.value
+    ? `${total.value} ${lang.t('saved.count')}`
+    : lang.t('saved.empty')
+})
 
 // ── Load ───────────────────────────────────────────────────────────
 async function load(p = 0) {
@@ -58,10 +67,8 @@ watch(() => favorites.count, (newCount, oldCount) => {
       <div class="page-title-row">
         <div class="page-icon">❤️</div>
         <div>
-          <h1 class="page-title">Sevimlilar</h1>
-          <p class="page-sub">
-            {{ total ? `${total} ta saqlangan retsept` : 'Hali hech narsa saqlanmagan' }}
-          </p>
+          <h1 class="page-title">{{ lang.t('nav.saved') }}</h1>
+          <p class="page-sub">{{ subText }}</p>
         </div>
       </div>
     </div>
@@ -150,11 +157,11 @@ watch(() => favorites.count, (newCount, oldCount) => {
 .page-title {
   font-size: 22px;
   font-weight: 800;
-  color: #f1f5f9;
+  color: var(--tx-1);
 }
 .page-sub {
   font-size: 13px;
-  color: #475569;
+  color: var(--tx-5);
   margin-top: 2px;
 }
 
@@ -169,19 +176,20 @@ watch(() => favorites.count, (newCount, oldCount) => {
 .skeleton-card {
   border-radius: 20px;
   overflow: hidden;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .sk-img {
   aspect-ratio: 4/3;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bd-md) 50%, var(--bg-input) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
 .sk-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .sk-line {
   border-radius: 6px;
-  background: rgba(255,255,255,0.05);
+  background: var(--bg-input);
   height: 12px;
   animation: shimmer 1.4s infinite;
 }
@@ -209,11 +217,11 @@ watch(() => favorites.count, (newCount, oldCount) => {
 .empty-title {
   font-size: 20px;
   font-weight: 800;
-  color: #94a3b8;
+  color: var(--tx-3);
 }
 .empty-sub {
   font-size: 14px;
-  color: #475569;
+  color: var(--tx-5);
   max-width: 340px;
   line-height: 1.6;
 }
@@ -247,22 +255,22 @@ watch(() => favorites.count, (newCount, oldCount) => {
   gap: 10px;
   padding: 12px 28px;
   border-radius: 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: #94a3b8;
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd-md);
+  color: var(--tx-3);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
 }
 .load-more-btn:hover:not(:disabled) {
-  background: rgba(255,255,255,0.08);
-  color: #e2e8f0;
+  background: var(--bg-input-f);
+  color: var(--tx-2);
 }
 .load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .load-hint {
   font-size: 11px;
-  color: #475569;
+  color: var(--tx-5);
   font-weight: 600;
 }
 

@@ -57,8 +57,8 @@ function search() {
 <style scoped>
 .topbar {
   height: 64px;
-  background: #0d1526;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--bd);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -73,13 +73,13 @@ function search() {
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--tx-4);
   padding: 8px;
   border-radius: 10px;
   transition: background 0.2s, color 0.2s;
   flex-shrink: 0;
 }
-.burger-btn:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+.burger-btn:hover { background: var(--bd); color: var(--tx-2); }
 .burger-btn svg { width: 22px; height: 22px; }
 
 @media (max-width: 1023px) {
@@ -92,18 +92,18 @@ function search() {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-input);
+  border: 1px solid var(--bd);
   border-radius: 12px;
   padding: 0 14px;
   height: 40px;
   transition: border-color 0.2s, background 0.2s;
 }
 .search-wrap:focus-within {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-input-f);
   border-color: rgba(216, 90, 48, 0.5);
 }
-.search-icon { width: 16px; height: 16px; color: #475569; flex-shrink: 0; }
+.search-icon { width: 16px; height: 16px; color: var(--tx-5); flex-shrink: 0; }
 
 .search-input {
   flex: 1;
@@ -111,10 +111,10 @@ function search() {
   border: none;
   outline: none;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--tx-2);
   min-width: 0;
 }
-.search-input::placeholder { color: #334155; }
+.search-input::placeholder { color: var(--tx-6); }
 
 .topbar-right {
   display: flex;
@@ -127,12 +127,12 @@ function search() {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--tx-4);
   text-decoration: none;
   transition: background 0.2s, color 0.2s;
 }

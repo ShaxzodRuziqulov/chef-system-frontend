@@ -31,8 +31,8 @@ const langs: { code: Lang; label: string; flag: string }[] = [
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd);
   border-radius: 10px;
   padding: 3px;
 }
@@ -45,7 +45,7 @@ const langs: { code: Lang; label: string; flag: string }[] = [
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: #475569;
+  color: var(--tx-5);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -54,8 +54,8 @@ const langs: { code: Lang; label: string; flag: string }[] = [
 }
 
 .lang-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
+  background: var(--bd);
+  color: var(--tx-3);
 }
 
 .lang-btn.active {

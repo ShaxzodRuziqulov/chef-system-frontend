@@ -4,6 +4,7 @@ import { shoppingApi  }             from '@/api/shoppingList'
 import { mealPlansApi }             from '@/api/mealPlans'
 import { useAuthStore }             from '@/stores/authStore'
 import { useUnitsStore }            from '@/stores/unitsStore'
+import { useLangStore }             from '@/stores/langStore'
 import { useToast }                 from '@/composables/useToast'
 import { parseApiError }            from '@/utils/parseApiError'
 import { useRouter }                from 'vue-router'
@@ -12,6 +13,7 @@ import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 const router     = useRouter()
 const auth       = useAuthStore()
 const units      = useUnitsStore()
+const lang       = useLangStore()
 const toast      = useToast()
 const lists      = ref([])
 const plans      = ref([])
@@ -46,14 +48,14 @@ async function generate() {
     const existingIdx = lists.value.findIndex(l => l.mealPlanId === Number(selectedPlanId.value))
     if (existingIdx !== -1) {
       lists.value[existingIdx] = created
-      toast.success("Xarid ro'yxati yangilandi!")
+      toast.success(lang.t('shop.updated'))
     } else {
       lists.value.unshift(created)
-      toast.success("Xarid ro'yxati yaratildi!")
+      toast.success(lang.t('shop.created'))
     }
     selectedPlanId.value = ''
   } catch (e) {
-    toast.error(parseApiError(e, "Ro'yxat yaratishda xato"))
+    toast.error(parseApiError(e, lang.t('shop.error_create')))
   } finally {
     generating.value = false
   }
@@ -79,9 +81,9 @@ async function doDeleteList() {
     await shoppingApi.delete(id)
     lists.value = lists.value.filter(l => l.id !== id)
     if (expanded.value === id) expanded.value = null
-    toast.success("Ro'yxat o'chirildi!")
+    toast.success(lang.t('shop.deleted'))
   } catch (e) {
-    toast.error(parseApiError(e, "O'chirishda xato"))
+    toast.error(parseApiError(e, lang.t('shop.error_delete')))
   } finally {
     deleting.value = null
   }
@@ -113,6 +115,16 @@ const isRegenerating = computed(() =>
   lists.value.some(l => l.mealPlanId === Number(selectedPlanId.value))
 )
 
+// Backend "PLANNAME — xarid ro'yxati" formatida saqlaydi
+// Suffiksni olib tashlab, tarjimali nomni qaytaramiz
+function listDisplayName(list) {
+  const raw = list.name || ''
+  // O'zbekcha / ruscha / inglizcha suffikslarni strip qilamiz
+  const cleaned = raw.replace(/\s*[—–-]\s*(xarid ro['ʼ']yxati|список покупок|shopping list)$/i, '').trim()
+  const base = cleaned || raw
+  return base ? `${base} — ${lang.t('shop.title')}` : lang.t('shop.title')
+}
+
 function planForList(list) {
   if (!list.mealPlanId) return null
   return plans.value.find(p => p.id === Number(list.mealPlanId)) ?? null
@@ -134,9 +146,9 @@ async function regenerateForList(list) {
     const updated = res.data?.data ?? res.data
     const idx = lists.value.findIndex(l => l.id === list.id)
     if (idx !== -1) lists.value[idx] = updated
-    toast.success("Xarid ro'yxati yangilandi!")
+    toast.success(lang.t('shop.updated'))
   } catch (e) {
-    toast.error(parseApiError(e, "Yangilashda xato"))
+    toast.error(parseApiError(e, lang.t('shop.error_update')))
   } finally {
     generating.value = false
   }
@@ -149,8 +161,8 @@ async function regenerateForList(list) {
     <!-- Header -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">Xarid ro'yxati</h1>
-        <p class="page-sub">Haftalik rejadan avtomatik yarating</p>
+        <h1 class="page-title">{{ lang.t('shop.title') }}</h1>
+        <p class="page-sub">{{ lang.t('shop.sub') }}</p>
       </div>
     </div>
 
@@ -158,12 +170,12 @@ async function regenerateForList(list) {
     <div class="generate-panel">
       <div class="gp-icon">🛒</div>
       <div class="gp-body">
-        <div class="gp-title">Reja asosida avtomatik ro'yxat</div>
-        <div class="gp-sub">Haftalik reja tanlang — barcha ingredientlar avtomatik qo'shiladi</div>
+        <div class="gp-title">{{ lang.t('shop.panel_title') }}</div>
+        <div class="gp-sub">{{ lang.t('shop.panel_sub') }}</div>
       </div>
       <div class="gp-controls">
         <select v-model="selectedPlanId" class="plan-select">
-          <option value="">— Reja tanlang —</option>
+          <option value="">{{ lang.t('shop.select_plan') }}</option>
           <option v-for="p in plans" :key="p.id" :value="p.id">
             {{ p.name }} ({{ p.weekStartDate }})
           </option>
@@ -176,12 +188,10 @@ async function regenerateForList(list) {
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
           </svg>
-          {{ generating ? (isRegenerating ? 'Yangilanmoqda...' : 'Yaratilmoqda...') : isRegenerating ? "Ro'yxatni yangilash" : "Ro'yxat yaratish" }}
+          {{ generating ? (isRegenerating ? lang.t('shop.updating') : lang.t('shop.creating')) : isRegenerating ? lang.t('shop.regenerate') : lang.t('shop.generate') }}
         </button>
       </div>
-      <p v-if="!plans.length" class="gp-hint">
-        ⚠️ Avval haftalik reja yarating
-      </p>
+      <p v-if="!plans.length" class="gp-hint">{{ lang.t('shop.need_plan') }}</p>
     </div>
 
     <!-- Skeleton -->
@@ -208,11 +218,11 @@ async function regenerateForList(list) {
 
             <div class="lh-info">
               <div class="lh-name-row">
-                <span class="lh-name">{{ list.name }}</span>
-                <span v-if="list.completed" class="badge-done">✓ Tugallangan</span>
+                <span class="lh-name">{{ listDisplayName(list) }}</span>
+                <span v-if="list.completed" class="badge-done">{{ lang.t('shop.done_badge') }}</span>
               </div>
               <div class="lh-meta">
-                <span>{{ purchasedCount(list) }} / {{ list.items?.length || 0 }} mahsulot</span>
+                <span>{{ purchasedCount(list) }} / {{ list.items?.length || 0 }} {{ lang.t('shop.items') }}</span>
                 <span v-if="list.mealPlanName" class="lh-plan">· {{ list.mealPlanName }}</span>
               </div>
 
@@ -230,7 +240,7 @@ async function regenerateForList(list) {
               @click="regenerateForList(list)"
               :disabled="generating"
               class="btn-refresh"
-              title="Reja o'zgardi — yangilash"
+              :title="lang.t('shop.refresh_title')"
             >
               <span v-if="generating" class="spinner sm" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -275,15 +285,13 @@ async function regenerateForList(list) {
               </div>
 
               <!-- Name -->
-              <span class="item-name">{{ item.ingredientNameUz || item.ingredientNameRu }}</span>
+              <span class="item-name">{{ lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu }}</span>
 
               <!-- Amount -->
               <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
             </div>
 
-            <div v-if="!list.items?.length" class="items-empty">
-              Ro'yxat bo'sh
-            </div>
+            <div v-if="!list.items?.length" class="items-empty">{{ lang.t('shop.empty_list') }}</div>
           </div>
         </Transition>
 
@@ -293,15 +301,15 @@ async function regenerateForList(list) {
     <!-- Empty state -->
     <div v-else class="empty-state">
       <div class="empty-icon">🛒</div>
-      <p class="empty-title">Hali ro'yxat yo'q</p>
-      <p class="empty-sub">Yuqoridan reja tanlang va avtomatik ro'yxat yarating</p>
+      <p class="empty-title">{{ lang.t('shop.empty_title') }}</p>
+      <p class="empty-sub">{{ lang.t('shop.empty_sub') }}</p>
     </div>
 
     <!-- Confirm delete (v-if/v-else zanjiridan tashqarida) -->
     <ConfirmModal
       :show="confirmDel.show"
-      message="Xarid ro'yxatini o'chirmoqchimisiz?"
-      confirm-label="Ha, o'chirish"
+      :message="lang.t('shop.confirm_del')"
+      :confirm-label="lang.t('shop.confirm_btn')"
       danger
       @confirm="doDeleteList"
       @cancel="confirmDel.show = false"
@@ -313,8 +321,8 @@ async function regenerateForList(list) {
 <style scoped>
 .page { display: flex; flex-direction: column; gap: 20px; }
 .page-header  { }
-.page-title   { font-size: 22px; font-weight: 900; color: #f1f5f9; }
-.page-sub     { font-size: 13px; color: #475569; margin-top: 3px; }
+.page-title   { font-size: 22px; font-weight: 900; color: var(--tx-1); }
+.page-sub     { font-size: 13px; color: var(--tx-5); margin-top: 3px; }
 
 /* ── Generate panel ── */
 .generate-panel {
@@ -329,8 +337,8 @@ async function regenerateForList(list) {
 }
 .gp-icon   { font-size: 32px; flex-shrink: 0; }
 .gp-body   { flex: 1; min-width: 200px; }
-.gp-title  { font-size: 14px; font-weight: 800; color: #e2e8f0; }
-.gp-sub    { font-size: 12px; color: #475569; margin-top: 2px; }
+.gp-title  { font-size: 14px; font-weight: 800; color: var(--tx-2); }
+.gp-sub    { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
 .gp-controls {
   display: flex;
   align-items: center;
@@ -340,10 +348,10 @@ async function regenerateForList(list) {
 .plan-select {
   height: 42px;
   padding: 0 12px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-input);
+  border: 1px solid var(--bd-lg);
   border-radius: 12px;
-  color: #94a3b8;
+  color: var(--tx-3);
   font-size: 13px;
   font-weight: 600;
   outline: none;
@@ -352,7 +360,7 @@ async function regenerateForList(list) {
   transition: border-color 0.2s;
 }
 .plan-select:focus  { border-color: rgba(216,90,48,0.5); }
-.plan-select option { background: #1e293b; }
+.plan-select option { background: var(--bg-surface); }
 
 .btn-generate {
   display: inline-flex;
@@ -381,13 +389,14 @@ async function regenerateForList(list) {
 /* ── List card ── */
 .lists { display: flex; flex-direction: column; gap: 10px; }
 .list-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 20px;
   overflow: hidden;
   transition: border-color 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
-.list-card:hover { border-color: rgba(255,255,255,0.1); }
+.list-card:hover { border-color: var(--bd-lg); }
 
 .list-header {
   display: flex;
@@ -399,7 +408,7 @@ async function regenerateForList(list) {
   user-select: none;
   transition: background 0.2s;
 }
-.list-header:hover { background: rgba(255,255,255,0.02); }
+.list-header:hover { background: var(--bg-card-md); }
 
 /* Circular progress */
 .lh-left {
@@ -423,7 +432,7 @@ async function regenerateForList(list) {
 }
 .cp-bg {
   fill: none;
-  stroke: rgba(255,255,255,0.06);
+  stroke: var(--bd);
   stroke-width: 3;
 }
 .cp-fill {
@@ -447,7 +456,7 @@ async function regenerateForList(list) {
 
 .lh-info { flex: 1; min-width: 0; }
 .lh-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.lh-name    { font-size: 15px; font-weight: 800; color: #e2e8f0; }
+.lh-name    { font-size: 15px; font-weight: 800; color: var(--tx-2); }
 .badge-done {
   padding: 3px 8px;
   border-radius: 8px;
@@ -456,12 +465,12 @@ async function regenerateForList(list) {
   background: rgba(216,90,48,0.15);
   color: #E8713E;
 }
-.lh-meta { font-size: 12px; color: #475569; margin-top: 3px; font-weight: 600; }
-.lh-plan { color: #334155; }
+.lh-meta { font-size: 12px; color: var(--tx-5); margin-top: 3px; font-weight: 600; }
+.lh-plan { color: var(--tx-6); }
 
 .progress-bar {
   height: 4px;
-  background: rgba(255,255,255,0.06);
+  background: var(--bd);
   border-radius: 4px;
   overflow: hidden;
   margin-top: 8px;
@@ -513,12 +522,12 @@ async function regenerateForList(list) {
 .btn-del svg { width: 15px; height: 15px; }
 .btn-del:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.chevron svg { width: 18px; height: 18px; color: #475569; transition: transform 0.3s; }
+.chevron svg { width: 18px; height: 18px; color: var(--tx-5); transition: transform 0.3s; }
 .chevron-up svg { transform: rotate(180deg); }
 
 /* ── Items ── */
 .items-wrap {
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--bd);
 }
 .item-row {
   display: flex;
@@ -526,18 +535,18 @@ async function regenerateForList(list) {
   gap: 12px;
   padding: 13px 20px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid var(--bd);
   transition: background 0.15s;
 }
 .item-row:last-child { border-bottom: none; }
-.item-row:hover { background: rgba(255,255,255,0.02); }
-.item-done .item-name { text-decoration: line-through; color: #334155; }
+.item-row:hover { background: var(--bg-card-md); }
+.item-done .item-name { text-decoration: line-through; color: var(--tx-6); }
 
 .item-check {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.15);
+  border: 2px solid var(--bd-xl);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -550,11 +559,11 @@ async function regenerateForList(list) {
 }
 .item-check svg { width: 11px; height: 11px; color: #fff; }
 
-.item-name   { flex: 1; font-size: 14px; font-weight: 600; color: #cbd5e1; transition: all 0.2s; }
-.item-amount { font-size: 13px; font-weight: 700; color: #475569; }
-.item-unit   { font-size: 11px; color: #334155; margin-left: 2px; }
+.item-name   { flex: 1; font-size: 14px; font-weight: 600; color: var(--tx-2); transition: all 0.2s; }
+.item-amount { font-size: 13px; font-weight: 700; color: var(--tx-5); }
+.item-unit   { font-size: 11px; color: var(--tx-6); margin-left: 2px; }
 
-.items-empty { padding: 20px; text-align: center; font-size: 13px; color: #334155; }
+.items-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--tx-6); }
 
 /* ── Expand animation ── */
 .expand-enter-active { transition: all 0.25s ease; }
@@ -566,7 +575,7 @@ async function regenerateForList(list) {
 .skel-item {
   height: 88px;
   border-radius: 20px;
-  background: rgba(255,255,255,0.04);
+  background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -577,13 +586,14 @@ async function regenerateForList(list) {
   align-items: center;
   gap: 10px;
   padding: 80px 24px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
   border-radius: 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .empty-icon  { font-size: 56px; margin-bottom: 8px; }
-.empty-title { font-size: 16px; font-weight: 800; color: #64748b; }
-.empty-sub   { font-size: 13px; color: #334155; }
+.empty-title { font-size: 16px; font-weight: 800; color: var(--tx-4); }
+.empty-sub   { font-size: 13px; color: var(--tx-6); }
 
 /* Spinner */
 .spinner {
