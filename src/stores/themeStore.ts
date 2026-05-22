@@ -4,7 +4,8 @@ import { ref } from 'vue'
 const THEME_KEY = 'oshpaz_theme'
 
 export const useThemeStore = defineStore('theme', () => {
-  const isDark = ref(localStorage.getItem(THEME_KEY) !== 'light')
+  const saved = localStorage.getItem(THEME_KEY)
+  const isDark = ref(saved === 'dark')
 
   function apply() {
     document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
