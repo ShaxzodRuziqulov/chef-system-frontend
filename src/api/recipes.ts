@@ -45,4 +45,7 @@ export const recipesApi = {
 
   delete: (id: number): Promise<AxiosResponse<void>> =>
     api.delete(`/recipes/${id}`),
+
+  incrementView: (id: number | string): Promise<AxiosResponse<void>> =>
+    api.post(`/recipes/${id}/view`),
 }

@@ -185,6 +185,7 @@ onMounted(async () => {
       avgRating.value   = recipe.value.averageRating ?? 0
       ratingCount.value = recipe.value.ratingCount   ?? 0
       loadRating(recipe.value.id)
+      recipesApi.incrementView(recipe.value.id).catch(() => {})
     }
   } catch {
     router.push('/app/recipes')

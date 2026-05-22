@@ -986,11 +986,11 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
 
 /* Stats */
 .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.stat-card { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: border-color 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.stat-card { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: border-color 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.06); min-width: 0; overflow: hidden; }
 .stat-card:hover { border-color: rgba(216,90,48,0.2); }
 .sc-icon { font-size: 24px; }
 .sc-val  { font-size: 24px; font-weight: 900; color: var(--tx-1); }
-.sc-lbl  { font-size: 11px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; }
+.sc-lbl  { font-size: 11px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; text-align: center; word-break: break-word; line-height: 1.2; }
 
 /* Admin tabs */
 .admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--bd); }
@@ -1299,9 +1299,56 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
 @keyframes spin   { to { transform: rotate(360deg); } }
 
 @media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(3, 1fr); }
+  /* Stats — 3 kolonna */
+  .stats-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat-card  { padding: 12px 6px; border-radius: 12px; }
+  .sc-icon    { font-size: 20px; }
+  .sc-val     { font-size: 20px; }
+  .sc-lbl     { font-size: 9px; letter-spacing: 0.02em; }
+
+  /* Tabs — gorizontal scroll */
+  .admin-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex-wrap: nowrap; }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .adm-tab { white-space: nowrap; flex-shrink: 0; padding: 9px 13px; font-size: 12px; }
+
+  /* Toolbar — grid: search+count top row, button below */
+  .list-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .search-wrap  { grid-column: 1; grid-row: 1; min-width: 0; }
+  .result-count { grid-column: 2; grid-row: 1; align-self: center; white-space: nowrap; }
+  .btn-add-new  { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: center; }
+
+  /* Recipe row */
+  .row-id            { display: none; }
+  .vis-on, .vis-off  { display: none; }
+  .recipe-row { padding: 10px 12px; gap: 10px; }
+  .row-img    { width: 44px; height: 44px; }
+
+  /* CRUD form full-width */
   .crud-section { grid-template-columns: 1fr; }
-  .ing-modal { max-width: 100%; border-radius: 16px 16px 0 0; }
+
+  /* Modal bottom sheet */
+  .ing-modal { max-width: 100%; border-radius: 20px 20px 0 0; max-height: 90vh; overflow-y: auto; }
   .ing-modal-overlay { align-items: flex-end; padding: 0; }
+
+  /* Users row */
+  .badge-admin, .badge-user { display: none; }
+  .user-avatar { width: 38px; height: 38px; }
+}
+
+@media (max-width: 480px) {
+  /* Stats — 2 ta kolonna kichik ekranlarda */
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+
+  /* Page header */
+  .page-title { font-size: 18px; }
+
+  /* Tabs kichikroq */
+  .adm-tab { padding: 8px 11px; font-size: 11px; }
 }
 </style>

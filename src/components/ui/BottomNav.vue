@@ -60,10 +60,6 @@ const isActive = (to) =>
       </span>
       <span class="nav-label">{{ item.label }}</span>
 
-      <!-- Favorites count badge -->
-      <span v-if="item.icon === 'heart' && favorites.count > 0 && !isActive(item.to)" class="fav-badge">
-        {{ favorites.count > 99 ? '99+' : favorites.count }}
-      </span>
     </RouterLink>
   </nav>
 </template>
@@ -110,22 +106,4 @@ const isActive = (to) =>
   letter-spacing: 0.02em;
 }
 
-/* Favorites badge */
-.fav-badge {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 8px;
-  font-weight: 800;
-  min-width: 14px;
-  height: 14px;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 3px;
-  line-height: 1;
-}
 </style>
