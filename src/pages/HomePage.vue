@@ -12,6 +12,27 @@ const categories    = ref([])
 const totalRecipes  = ref(0)
 const loading       = ref(true)
 
+const CAT_ICONS = [
+  { keys: ['milliy', 'national', 'узбек', 'national'],  icon: '🏺' },
+  { keys: ["sho'rva", 'shorva', 'soup', 'суп', 'шурп'], icon: '🍜' },
+  { keys: ['salat', 'salad', 'салат'],                   icon: '🥗' },
+  { keys: ['pishiriq', 'выпечк', 'baking', 'non'],       icon: '🥐' },
+  { keys: ['shirin', 'desert', 'десерт', 'sweet'],       icon: '🍰' },
+  { keys: ['go\'sht', 'мясо', 'meat', 'kabob'],          icon: '🥩' },
+  { keys: ['sabzavot', 'овощ', 'vegetable'],             icon: '🥦' },
+  { keys: ['baliq', 'рыба', 'fish', 'dengiz'],           icon: '🐟' },
+  { keys: ['ichimlik', 'напиток', 'drink', 'juice'],     icon: '🥤' },
+  { keys: ['tez', 'fast', 'быстр', 'snack'],             icon: '⚡' },
+]
+
+function catIcon(cat) {
+  const name = ((cat.nameUz || '') + ' ' + (cat.nameRu || '') + ' ' + (cat.nameEng || '')).toLowerCase()
+  for (const entry of CAT_ICONS) {
+    if (entry.keys.some(k => name.includes(k))) return entry.icon
+  }
+  return '🍽️'
+}
+
 onMounted(async () => {
   try {
     const [r, c] = await Promise.all([
@@ -100,7 +121,7 @@ onMounted(async () => {
           :to="`/app/recipes?category=${cat.id}`"
           class="cat-item"
         >
-          <span class="cat-icon">🥘</span>
+          <span class="cat-icon">{{ catIcon(cat) }}</span>
           <span class="cat-name">{{ lang.catName(cat) }}</span>
         </RouterLink>
       </div>
@@ -225,12 +246,14 @@ onMounted(async () => {
 .btn-ghost:hover { background: rgba(255,255,255,0.14); color: #f1f5f9; }
 
 .hero-emoji {
-  font-size: 100px;
-  opacity: 0.08;
+  font-size: 120px;
+  opacity: 0.85;
   user-select: none;
   line-height: 1;
   position: relative;
-  z-index: 0;
+  z-index: 1;
+  filter: drop-shadow(0 0 40px rgba(216,90,48,0.4));
+  flex-shrink: 0;
 }
 @media (max-width: 640px) {
   .hero { padding: 28px 24px; }

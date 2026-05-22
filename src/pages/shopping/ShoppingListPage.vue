@@ -20,9 +20,11 @@ const plans      = ref([])
 const loading    = ref(true)
 const generating = ref(false)
 const deleting   = ref(null)
+const sharing    = ref(null)
 const selectedPlanId = ref('')
 const expanded   = ref(null)
 const confirmDel = ref({ show: false, id: null })
+
 
 onMounted(async () => {
   if (!auth.isAuthenticated) { router.push('/login'); return }
@@ -98,11 +100,26 @@ function purchasedCount(list) {
   return list.items?.filter(i => i.status === 'PURCHASED').length ?? 0
 }
 
-// Category groups for items
-function groupItems(items) {
-  if (!items?.length) return []
-  // Just return flat for now — categories can be grouped by unit if needed
-  return items
+function shareList(list) {
+  sharing.value = list.id
+  const name = listDisplayName(list)
+  let text = `🛒 ${name}\n\n`
+  for (const item of list.items ?? []) {
+    const iname = lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu
+    const amt   = units.formatAmount(item.amount, item.unit)
+    const check = item.status === 'PURCHASED' ? '✅' : '▫️'
+    text += `${check} ${iname} — ${amt}\n`
+  }
+  text += `\n📱 Oshpaz ilovasidan`
+
+  const tgUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`
+  window.open(tgUrl, '_blank')
+
+  navigator.clipboard?.writeText(text).then(() => {
+    toast.success(lang.t('shop.copied'))
+  }).catch(() => {})
+
+  setTimeout(() => { sharing.value = null }, 1500)
 }
 
 const selectedPlanName = computed(() => {
@@ -249,6 +266,23 @@ async function regenerateForList(list) {
               </svg>
             </button>
 
+            <!-- Share button -->
+            <button
+              v-if="list.items?.length"
+              @click="shareList(list)"
+              class="btn-share"
+              :class="{ 'btn-share-done': sharing === list.id }"
+              :title="lang.t('shop.share_title')"
+            >
+              <svg v-if="sharing !== list.id" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </button>
+
             <button @click="askDeleteList(list.id)" class="btn-del"
               :disabled="deleting === list.id">
               <span v-if="deleting === list.id" class="spinner sm" />
@@ -266,7 +300,7 @@ async function regenerateForList(list) {
           </div>
         </div>
 
-        <!-- Items -->
+        <!-- Items grouped by category -->
         <Transition name="expand">
           <div v-if="expanded === list.id" class="items-wrap">
             <div
@@ -276,18 +310,13 @@ async function regenerateForList(list) {
               :class="{ 'item-done': item.status === 'PURCHASED' }"
               @click="toggleItem(list.id, item.id, item.status)"
             >
-              <!-- Checkbox -->
               <div class="item-check" :class="{ 'check-done': item.status === 'PURCHASED' }">
                 <svg v-if="item.status === 'PURCHASED'"
                   viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
                 </svg>
               </div>
-
-              <!-- Name -->
               <span class="item-name">{{ lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu }}</span>
-
-              <!-- Amount -->
               <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
             </div>
 
@@ -521,6 +550,24 @@ async function regenerateForList(list) {
 .btn-del:hover:not(:disabled) { background: rgba(239,68,68,0.16); }
 .btn-del svg { width: 15px; height: 15px; }
 .btn-del:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-share {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(37,167,138,0.35);
+  background: rgba(37,167,138,0.08);
+  color: #25a78a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+.btn-share:hover { background: rgba(37,167,138,0.18); border-color: rgba(37,167,138,0.6); }
+.btn-share-done { background: rgba(37,167,138,0.2); }
+.btn-share svg { width: 15px; height: 15px; }
+
 
 .chevron svg { width: 18px; height: 18px; color: var(--tx-5); transition: transform 0.3s; }
 .chevron-up svg { transform: rotate(180deg); }

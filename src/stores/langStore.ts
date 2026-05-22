@@ -43,6 +43,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'common.total_time':     'Umumiy vaqt',
     'common.rating':         'Reyting',
     'common.views':          "Ko'rishlar",
+    'common.not_rated':      'Baholanmagan',
     'common.servings':       'Porsiya',
     'common.visible':        "Ko'rinadi",
     'common.hidden':         'Yashirin',
@@ -233,6 +234,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.error_create':  "Ro'yxat yaratishda xato",
     'shop.error_delete':  "O'chirishda xato",
     'shop.error_update':  "Yangilashda xato",
+    'shop.share_title':   "Telegram orqali ulashish",
+    'shop.copied':        "Ro'yxat nusxalandi!",
 
     // Admin kengaytirilgan
     'admin.tags':           'Teglar',
@@ -374,6 +377,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'common.total_time':     'Общее время',
     'common.rating':         'Рейтинг',
     'common.views':          'Просмотры',
+    'common.not_rated':      'Без оценок',
     'common.servings':       'Порций',
     'common.visible':        'Виден',
     'common.hidden':         'Скрыт',
@@ -555,6 +559,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.error_create':  'Ошибка создания списка',
     'shop.error_delete':  'Ошибка удаления',
     'shop.error_update':  'Ошибка обновления',
+    'shop.share_title':   'Поделиться в Telegram',
+    'shop.copied':        'Список скопирован!',
 
     'admin.tags':           'Теги',
     'admin.ingredients':    'Ингредиенты',
@@ -695,6 +701,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'common.total_time':     'Total time',
     'common.rating':         'Rating',
     'common.views':          'Views',
+    'common.not_rated':      'Not rated',
     'common.servings':       'Servings',
     'common.visible':        'Visible',
     'common.hidden':         'Hidden',
@@ -876,6 +883,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.error_create':  'Error creating list',
     'shop.error_delete':  'Error deleting',
     'shop.error_update':  'Error updating',
+    'shop.share_title':   'Share via Telegram',
+    'shop.copied':        'List copied to clipboard!',
 
     'admin.tags':           'Tags',
     'admin.ingredients':    'Ingredients',

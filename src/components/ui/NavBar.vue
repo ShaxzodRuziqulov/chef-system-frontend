@@ -15,7 +15,7 @@ const menuOpen = ref(false)
 const nav = computed(() => [
   { label: langStore.t('nav.home'),      to: '/app',               icon: 'home'     },
   { label: langStore.t('nav.recipes'),   to: '/app/recipes',       icon: 'book'     },
-  { label: 'Sevimlilar',                 to: '/app/saved',         icon: 'heart'    },
+  { label: langStore.t('nav.saved'),     to: '/app/saved',         icon: 'heart'    },
   { label: langStore.t('nav.meal_plan'), to: '/app/meal-plans',    icon: 'calendar' },
   { label: langStore.t('nav.shopping'),  to: '/app/shopping-lists', icon: 'cart'   },
 ])

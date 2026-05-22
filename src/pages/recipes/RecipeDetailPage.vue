@@ -319,7 +319,9 @@ onMounted(async () => {
       </div>
       <div class="stat-item">
         <span class="stat-icon">⭐</span>
-        <div class="stat-val">{{ avgRating > 0 ? avgRating.toFixed(1) : '—' }}</div>
+        <div class="stat-val" :class="{ 'stat-new': avgRating === 0 }">
+          {{ avgRating > 0 ? avgRating.toFixed(1) : lang.t('common.not_rated') }}
+        </div>
         <div class="stat-lbl">{{ lang.t('common.rating') }}</div>
       </div>
       <div class="stat-item">
@@ -692,6 +694,7 @@ onMounted(async () => {
 .stat-item:hover { border-color: rgba(216,90,48,0.25); }
 .stat-icon { font-size: 22px; }
 .stat-val  { font-size: 14px; font-weight: 800; color: var(--tx-2); }
+.stat-new  { font-size: 11px; color: var(--tx-5); font-weight: 600; }
 .stat-lbl  { font-size: 10px; font-weight: 600; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em; }
 
 @media (max-width: 480px) {
