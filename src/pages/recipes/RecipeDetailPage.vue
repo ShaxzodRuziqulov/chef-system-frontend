@@ -47,6 +47,7 @@ async function deleteRecipe() {
 function handleSaved(updated) {
   recipe.value = updated
   showFormModal.value = false
+  tab.value = 'ingredients'
 }
 
 // ── Difficulty map ────────────────────────────────────────────────
