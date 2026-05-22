@@ -1,3 +1,7 @@
+<script>
+export default { name: 'MealPlans' }
+</script>
+
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { mealPlansApi }   from '@/api/mealPlans'
@@ -28,14 +32,12 @@ const MEAL_COLORS = {
   BREAKFAST: { bg: 'rgba(59,130,246,0.12)',  border: 'rgba(59,130,246,0.25)',  text: '#60a5fa', dot: '#3b82f6' },
   LUNCH:     { bg: 'rgba(34,197,94,0.10)',   border: 'rgba(34,197,94,0.22)',   text: '#4ade80', dot: '#22c55e' },
   DINNER:    { bg: 'rgba(216,90,48,0.12)',   border: 'rgba(216,90,48,0.25)',   text: '#E8713E', dot: '#D85A30' },
-  SNACK:     { bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.22)',  text: '#fbbf24', dot: '#f59e0b' },
 }
 
 const mealLabel = computed(() => ({
   BREAKFAST: lang.t('meal.breakfast'),
   LUNCH:     lang.t('meal.lunch'),
   DINNER:    lang.t('meal.dinner'),
-  SNACK:     lang.t('meal.snack'),
 }))
 
 const dayLabel = computed(() => lang.t('meal.days_full').split(','))
@@ -64,7 +66,16 @@ async function createPlan() {
   createError.value = ''
   try {
     const res = await mealPlansApi.create(newPlan.value)
-    plans.value.unshift(res.data?.data ?? res.data)
+    let plan = res.data?.data ?? res.data
+
+    // Darhol faollashtirish
+    try {
+      const actRes = await mealPlansApi.activate(plan.id)
+      plan = actRes.data?.data ?? actRes.data ?? plan
+    } catch { /* faollashtirish xatosi bo'lsa plan baribir qo'shiladi */ }
+
+    plans.value.unshift(plan)
+    expanded.value = plan.id   // yangi plan avtomatik ochiq
     showCreate.value = false
     resetCreate()
     toast.success("Haftalik reja yaratildi!")
@@ -206,10 +217,11 @@ function resetEntry() {
   recipeSearch.value = ''
 }
 
-function openEntryModal(planId, prefilledDay) {
+function openEntryModal(planId, prefilledDay, prefilledMeal) {
   entryPlanId.value = planId
   resetEntry()
-  if (prefilledDay) newEntry.value.dayOfWeek = prefilledDay
+  if (prefilledDay)  newEntry.value.dayOfWeek = prefilledDay
+  if (prefilledMeal) newEntry.value.mealType  = prefilledMeal
   showEntry.value = true
 }
 
@@ -253,7 +265,7 @@ const randomPlanId    = ref(null)
 const randomLoading   = ref(false)
 const randomSearch    = ref('')
 const randomSelected  = ref([])   // tanlangan recipe id lar (bo'sh = hammasi)
-const randomMeals     = ref({ BREAKFAST: true, LUNCH: true, DINNER: true, SNACK: false })
+const randomMeals     = ref({ BREAKFAST: true, LUNCH: true, DINNER: true })
 const randomOnlyEmpty = ref(true)
 
 const randomPool = computed(() => {
@@ -271,21 +283,38 @@ function toggleRandomRecipe(id) {
   else randomSelected.value.splice(idx, 1)
 }
 
+const allPoolSelected = computed(() =>
+  randomPool.value.length > 0 &&
+  randomPool.value.every(r => randomSelected.value.includes(r.id))
+)
+
+function toggleSelectAll() {
+  if (allPoolSelected.value) {
+    randomSelected.value = randomSelected.value.filter(
+      id => !randomPool.value.some(r => r.id === id)
+    )
+  } else {
+    const toAdd = randomPool.value
+      .map(r => r.id)
+      .filter(id => !randomSelected.value.includes(id))
+    randomSelected.value = [...randomSelected.value, ...toAdd]
+  }
+}
+
 function openRandomModal(planId) {
   randomPlanId.value = planId
   randomSelected.value = []
   randomSearch.value = ''
-  randomMeals.value = { BREAKFAST: true, LUNCH: true, DINNER: true, SNACK: false }
+  randomMeals.value = { BREAKFAST: true, LUNCH: true, DINNER: true }
   randomOnlyEmpty.value = true
   showRandom.value = true
 }
 
 // Qoidalar: BREAKFAST uchun HARD tavsiya etilmaydi
 const MEAL_DIFFICULTY_RULES = {
-  BREAKFAST: ['EASY', 'MEDIUM'],   // ertalab og'ir ovqat yo'q
+  BREAKFAST: ['EASY', 'MEDIUM'],
   LUNCH:     ['EASY', 'MEDIUM', 'HARD'],
   DINNER:    ['EASY', 'MEDIUM', 'HARD'],
-  SNACK:     ['EASY'],              // yengilgina snack
 }
 
 async function applyRandom() {
@@ -408,7 +437,9 @@ function entriesForDay(plan, dayName) {
 // ── Formatted dates ─────────────────────────────────────────────────────
 function formatDate(d) {
   if (!d) return ''
-  return new Date(d + 'T00:00:00').toLocaleDateString('uz-UZ', { day: '2-digit', month: 'short' })
+  const date = new Date(d + 'T00:00:00')
+  const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
+  return `${date.getDate()} ${months[date.getMonth()]}`
 }
 
 // ── Load ────────────────────────────────────────────────────────────────
@@ -426,6 +457,9 @@ async function load() {
     ])
     plans.value      = (resPlans.data?.data   ?? resPlans.data)?.content   ?? []
     allRecipes.value = (resRecipes.data?.data ?? resRecipes.data)?.content ?? []
+    if (expanded.value === null && plans.value.length) {
+      expanded.value = plans.value[0].id
+    }
   } catch (e) {
     toast.error(parseApiError(e, "Ma'lumotlarni yuklashda xato"))
   } finally {
@@ -480,17 +514,6 @@ async function load() {
           </div>
 
           <div class="plan-actions" @click.stop>
-            <button
-              v-if="plan.status === 'DRAFT'"
-              @click="activate(plan.id)"
-              class="btn-activate"
-              title="Faollashtirish"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="act-icon">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-              </svg>
-              {{ lang.t('meal.activate') }}
-            </button>
             <button @click.stop="openRandomModal(plan.id)" class="btn-icon btn-random" title="Random to'ldirish">
               🎲
             </button>
@@ -524,42 +547,41 @@ async function load() {
           <div v-if="expanded === plan.id" class="weekly-grid-wrap">
             <div class="weekly-grid">
 
-              <!-- Day headers -->
+              <!-- Corner -->
+              <div class="grid-corner"></div>
+
+              <!-- Kun sarlavhalari -->
               <div v-for="(dayName, i) in DAYS" :key="'h'+dayName" class="day-header">
                 <span class="day-short">{{ dayShort[i] }}</span>
                 <span class="day-num">{{ dayDate(plan, i) }}</span>
                 <span class="day-mon">{{ dayMonth(plan, i) }}</span>
-                <button
-                  class="day-add-btn"
-                  @click.stop="openEntryModal(plan.id, dayName)"
-                  title="Ovqat qo'shish"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/>
-                  </svg>
-                </button>
               </div>
 
-              <!-- Day cells -->
-              <div v-for="(dayName, i) in DAYS" :key="'c'+dayName" class="day-cell">
-                <template v-if="entriesForDay(plan, dayName).length">
+              <!-- 3 ovqat vaqti qatori -->
+              <template v-for="mealType in ['BREAKFAST','LUNCH','DINNER']" :key="mealType">
+
+                <!-- Qator labeli -->
+                <div class="meal-row-label">
+                  <span class="meal-row-dot" :style="{ background: MEAL_COLORS[mealType]?.dot }"/>
+                  <span class="meal-row-name">{{ mealLabel[mealType] }}</span>
+                </div>
+
+                <!-- 7 kun katak -->
+                <div
+                  v-for="dayName in DAYS"
+                  :key="mealType+dayName"
+                  class="day-cell"
+                >
                   <div
-                    v-for="entry in entriesForDay(plan, dayName)"
+                    v-for="entry in entriesForDay(plan, dayName).filter(e => e.mealType === mealType)"
                     :key="entry.id"
                     class="entry-chip"
                     :style="{
-                      background: MEAL_COLORS[entry.mealType]?.bg,
-                      borderColor: MEAL_COLORS[entry.mealType]?.border,
+                      background: MEAL_COLORS[mealType]?.bg,
+                      borderColor: MEAL_COLORS[mealType]?.border,
                     }"
                   >
-                    <span
-                      class="meal-dot"
-                      :style="{ background: MEAL_COLORS[entry.mealType]?.dot }"
-                    />
                     <div class="chip-body">
-                      <span class="entry-meal" :style="{ color: MEAL_COLORS[entry.mealType]?.text }">
-                        {{ mealLabel[entry.mealType] }}
-                      </span>
                       <span class="entry-recipe" :title="entry.recipeTitleUz">
                         {{ entry.recipeTitleUz || entry.recipeTitleRu }}
                       </span>
@@ -577,16 +599,18 @@ async function load() {
                       </svg>
                     </button>
                   </div>
-                </template>
-                <div v-else class="day-empty">
-                  <button class="day-empty-add" @click.stop="openEntryModal(plan.id, dayName)">
+                  <button
+                    class="cell-add-btn"
+                    @click.stop="openEntryModal(plan.id, dayName, mealType)"
+                    :title="`${mealLabel[mealType]} qo'shish`"
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
                     </svg>
                   </button>
                 </div>
-              </div>
 
+              </template>
             </div>
           </div>
         </Transition>
@@ -886,7 +910,6 @@ async function load() {
               <!-- Qoidalar -->
               <div class="random-info">
                 <div class="ri-row"><span class="ri-badge ri-breakfast">Ertalik</span> Faqat yengil/o'rta ovqatlar (EASY / MEDIUM)</div>
-                <div class="ri-row"><span class="ri-badge ri-snack">Snack</span> Faqat yengil ovqatlar (EASY)</div>
                 <div class="ri-row"><span class="ri-badge ri-lunch">Tushlik / Kechki</span> Har qanday ovqat</div>
               </div>
 
@@ -922,6 +945,12 @@ async function load() {
                   <input v-model="randomSearch" class="sf-input" placeholder="Retsept qidirish…" />
                   <span v-if="randomSelected.length" class="sf-count">{{ randomSelected.length }} ta tanlangan</span>
                 </div>
+                <label class="select-all-check" @click.prevent="toggleSelectAll">
+                  <input type="checkbox" :checked="allPoolSelected" :indeterminate="randomSelected.length > 0 && !allPoolSelected" class="rr-cb" readonly />
+                  <span>Hammasini tanlash</span>
+                  <span class="sf-count" style="margin-left:auto">{{ randomSelected.length }} / {{ randomPool.length }}</span>
+                </label>
+
                 <div class="random-recipe-list">
                   <label
                     v-for="r in randomPool.slice(0, 30)"
@@ -1087,22 +1116,6 @@ async function load() {
 /* Action buttons */
 .plan-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-.btn-activate {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(216,90,48,0.12);
-  color: #E8713E;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-activate:hover { background: rgba(216,90,48,0.22); }
-.act-icon { width: 11px; height: 11px; }
 
 .btn-icon {
   width: 32px;
@@ -1132,105 +1145,81 @@ async function load() {
   padding: 0 16px 16px;
   border-top: 1px solid var(--bd);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .weekly-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(110px, 1fr));
-  gap: 8px;
-  min-width: 750px;
-  padding-top: 14px;
+  grid-template-columns: 90px repeat(7, minmax(100px, 1fr));
+  gap: 6px;
+  min-width: 800px;
+  padding-top: 12px;
 }
 
+/* Corner */
+.grid-corner { /* bo'sh */ }
+
+/* Kun sarlavhasi */
 .day-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding-bottom: 10px;
-  position: relative;
+  gap: 1px;
+  padding-bottom: 8px;
 }
-.day-short {
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--tx-5);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.day-num {
-  font-size: 18px;
-  font-weight: 900;
-  color: var(--tx-3);
-  line-height: 1;
-}
-.day-mon {
-  font-size: 10px;
-  color: var(--tx-6);
-  font-weight: 600;
-}
-.day-add-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px dashed var(--bd-lg);
-  background: var(--bg-card);
-  color: var(--tx-5);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 4px;
-  transition: all 0.2s;
-}
-.day-add-btn svg { width: 12px; height: 12px; }
-.day-add-btn:hover {
-  border-color: rgba(216,90,48,0.4);
-  background: rgba(216,90,48,0.08);
-  color: #E8713E;
-}
+.day-short { font-size: 10px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.08em; }
+.day-num   { font-size: 20px; font-weight: 900; color: var(--tx-2); line-height: 1.1; }
+.day-mon   { font-size: 10px; color: var(--tx-6); font-weight: 600; }
 
-.day-cell {
-  min-height: 80px;
-  border-radius: 12px;
-  border: 1px solid var(--bd);
-  background: var(--bg-card);
-  padding: 6px;
+/* Ovqat vaqti qator labeli */
+.meal-row-label {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  min-height: 64px;
+}
+.meal-row-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.meal-row-name { font-size: 9px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em; writing-mode: vertical-rl; transform: rotate(180deg); }
+
+/* Kun katak */
+.day-cell {
+  min-height: 64px;
+  border-radius: 10px;
+  border: 1px solid var(--bd);
+  background: var(--bg-card);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
 }
 
 /* Entry chip */
 .entry-chip {
   position: relative;
-  border-radius: 8px;
+  border-radius: 7px;
   border-width: 1px;
   border-style: solid;
-  padding: 5px 24px 5px 8px;
+  padding: 5px 22px 5px 7px;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 5px;
   transition: filter 0.15s;
 }
-.entry-chip:hover { filter: brightness(1.1); }
-
-.meal-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 3px;
-}
+.entry-chip:hover { filter: brightness(1.08); }
 .chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.entry-meal   { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
-.entry-recipe { font-size: 10px; color: var(--tx-3); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.entry-recipe   { font-size: 10px; font-weight: 700; color: var(--tx-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .entry-servings { font-size: 9px; color: var(--tx-4); font-weight: 600; }
 
 .entry-del {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 16px;
-  height: 16px;
+  top: 3px; right: 3px;
+  width: 16px; height: 16px;
   border: none;
   background: rgba(239,68,68,0.12);
   border-radius: 4px;
@@ -1246,18 +1235,13 @@ async function load() {
 .entry-chip:hover .entry-del { opacity: 1; }
 .entry-del:hover { background: rgba(239,68,68,0.25); }
 
-/* Empty cell */
-.day-empty {
+/* Katak qo'shish tugmasi */
+.cell-add-btn {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.day-empty-add {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px dashed var(--bd-md);
+  width: 100%;
+  min-height: 48px;
+  border-radius: 7px;
+  border: 1.5px dashed var(--bd-md);
   background: none;
   color: var(--tx-6);
   cursor: pointer;
@@ -1266,9 +1250,9 @@ async function load() {
   justify-content: center;
   transition: all 0.2s;
 }
-.day-empty-add svg { width: 14px; height: 14px; }
-.day-empty-add:hover {
-  border-color: rgba(216,90,48,0.3);
+.cell-add-btn svg { width: 14px; height: 14px; }
+.cell-add-btn:hover {
+  border-color: rgba(216,90,48,0.4);
   background: rgba(216,90,48,0.06);
   color: #E8713E;
 }
@@ -1664,6 +1648,25 @@ async function load() {
 }
 .only-empty-check input { width: 15px; height: 15px; accent-color: #E8713E; cursor: pointer; }
 
+/* Select all */
+.select-all-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--tx-3);
+  user-select: none;
+  margin-bottom: 6px;
+  transition: background 0.15s;
+}
+.select-all-check:hover { background: rgba(216,90,48,0.08); color: #E8713E; }
+
 /* Recipe list */
 .random-recipe-list {
   max-height: 200px;
@@ -1705,4 +1708,35 @@ async function load() {
 .diff-easy { background: rgba(34,197,94,0.12); color: #4ade80; }
 .diff-med  { background: rgba(245,158,11,0.12); color: #fbbf24; }
 .diff-hard { background: rgba(239,68,68,0.12);  color: #f87171; }
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  /* Plan header — kichikroq padding */
+  .plan-header { padding: 12px 14px; gap: 8px; }
+
+  /* Plan info area — truncate long names */
+  .plan-name  { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  .plan-dates { font-size: 11px; flex-wrap: wrap; gap: 4px; }
+  .entry-count { display: none; }
+
+  /* Action buttons — compact */
+  .plan-actions { gap: 4px; }
+  .btn-icon     { width: 28px; height: 28px; }
+  .btn-icon svg { width: 13px; height: 13px; }
+  .btn-random   { font-size: 14px; }
+  .chevron svg  { width: 16px; height: 16px; }
+
+  /* Modal — bottom sheet */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-box     { border-radius: 20px 20px 0 0; max-height: 90vh; overflow-y: auto; }
+
+  /* Form row — ustma-ust */
+  .form-row { grid-template-columns: 1fr; gap: 10px; }
+
+  /* Grid kichikroq */
+  .weekly-grid { grid-template-columns: 64px repeat(7, minmax(80px, 1fr)); min-width: 640px; gap: 4px; }
+  .day-num     { font-size: 16px; }
+  .meal-row-label { min-height: 56px; padding: 4px 2px; }
+  .cell-add-btn   { min-height: 42px; }
+}
 </style>

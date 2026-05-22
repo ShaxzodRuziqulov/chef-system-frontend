@@ -21,7 +21,11 @@ onMounted(() => {
 
     <main class="layout-content">
       <div class="layout-inner">
-        <RouterView />
+        <RouterView v-slot="{ Component, route }">
+          <keep-alive :include="['MealPlans']">
+            <component :is="Component" :key="route.name" />
+          </keep-alive>
+        </RouterView>
       </div>
     </main>
 
