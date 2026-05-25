@@ -7,8 +7,10 @@ import { recipesApi }               from '@/api/recipes'
 import { uploadApi }                from '@/api/upload'
 import { mealPlansApi }             from '@/api/mealPlans'
 import { authApi }                  from '@/api/auth'
+import { usersApi }                 from '@/api/users'
 import RecipeCard                   from '@/components/recipe/RecipeCard.vue'
 import RecipeFormModal              from '@/components/recipe/RecipeFormModal.vue'
+import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }          from '@/utils/imageUrl'
 
 const auth      = useAuthStore()
@@ -18,7 +20,9 @@ const favorites = useFavoritesStore()
 const recipes       = ref([])
 const mealPlanCount = ref(0)
 const loading       = ref(true)
-const deletingId    = ref(null)
+const deletingId      = ref(null)
+const showDeleteModal = ref(false)
+const deleteTargetId  = ref(null)
 
 // ── Recipe form ───────────────────────────────────────────────────
 const showRecipeModal = ref(false)
@@ -51,7 +55,7 @@ const bloggerSuccess   = ref(false)
 // ── Computed ──────────────────────────────────────────────────────
 const roleLabel = computed(() => {
   if (auth.isAdmin)   return { text: 'Admin',          icon: '👑', cls: 'role-admin' }
-  if (auth.isBlogger) return { text: 'Blogger',        icon: '👨‍🍳', cls: 'role-blogger' }
+  if (auth.isBlogger) return { text: 'Oshpaz',          icon: '👨‍🍳', cls: 'role-blogger' }
   return               { text: 'Foydalanuvchi',        icon: '👤', cls: 'role-user' }
 })
 
@@ -166,20 +170,44 @@ function handleRecipeSaved(saved) {
   editingRecipe.value = null
 }
 
-async function deleteRecipe(id) {
-  if (!confirm(lang.t('common.confirm_delete'))) return
+function askDeleteRecipe(id) {
+  deleteTargetId.value  = id
+  showDeleteModal.value = true
+}
+
+async function confirmDeleteRecipe() {
+  const id = deleteTargetId.value
+  showDeleteModal.value = false
   deletingId.value = id
   try {
     await recipesApi.delete(id)
     recipes.value = recipes.value.filter(r => r.id !== id)
-  } catch { alert(lang.t('common.error_delete')) }
+  } catch { /* toast not imported here, silent */ }
   finally  { deletingId.value = null }
 }
 
-// ── Blogger ───────────────────────────────────────────────────────
+// ── Oshpaz (Blogger) ──────────────────────────────────────────────
 function openBloggerModal() {
   termsScrolled.value = false; bloggerError.value = ''; bloggerSuccess.value = false
   showBloggerModal.value = true
+}
+
+// Oshpazlikdan chiqish
+const showLeaveModal  = ref(false)
+const leaveLoading    = ref(false)
+const leaveError      = ref('')
+
+async function confirmLeaveOshpaz() {
+  leaveLoading.value = true; leaveError.value = ''
+  try {
+    await usersApi.leaveOshpaz(auth.user.id)
+    showLeaveModal.value = false
+    await auth.fetchUser()
+  } catch (e) {
+    leaveError.value = e?.response?.data?.message || "Xatolik yuz berdi. Admin bilan bog'laning."
+  } finally {
+    leaveLoading.value = false
+  }
 }
 function onTermsScroll(e) {
   const el = e.target
@@ -304,25 +332,32 @@ async function confirmBecomeBlogger() {
         </div>
       </div>
 
-      <!-- ── BLOGGER BANNER (USER uchun) ── -->
+      <!-- ── OSHPAZ BANNER (USER uchun) ── -->
       <div v-if="!auth.isBlogger" class="blogger-cta" @click="openBloggerModal">
         <div class="bcta-left">
           <div class="bcta-emoji">👨‍🍳</div>
           <div>
-            <div class="bcta-title">Blogger bo'lish</div>
-            <div class="bcta-sub">Retseptlaringizni ulashing, auditoriya to'plang</div>
+            <div class="bcta-title">Oshpaz bo'lish</div>
+            <div class="bcta-sub">Retseptlaringizni ulashing, hammaga ko'rsating</div>
           </div>
         </div>
         <div class="bcta-arrow">›</div>
       </div>
 
-      <!-- ── BLOGGER ACTIVE (BLOGGER uchun) ── -->
+      <!-- ── OSHPAZ ACTIVE (BLOGGER uchun) ── -->
       <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active">
         <span class="ba-icon">✅</span>
         <div>
-          <div class="ba-title">Tasdiqlangan Blogger</div>
+          <div class="ba-title">Tasdiqlangan Oshpaz</div>
           <div class="ba-sub">Retseptlaringizni qo'shing va barchaga ko'rsating</div>
         </div>
+        <button class="ba-leave-btn" @click.stop="showLeaveModal = true" title="Oshpazlikdan chiqish">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          Chiqish
+        </button>
       </div>
 
       <!-- ── BLOGGER RETSEPTLARI ── -->
@@ -342,7 +377,7 @@ async function confirmBecomeBlogger() {
               <button @click.prevent="openEditRecipe(r)" class="ov-btn ov-edit">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
               </button>
-              <button @click.prevent="deleteRecipe(r.id)" :disabled="deletingId === r.id" class="ov-btn ov-del">
+              <button @click.prevent="askDeleteRecipe(r.id)" :disabled="deletingId === r.id" class="ov-btn ov-del">
                 <span v-if="deletingId === r.id" class="spin" />
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
               </button>
@@ -366,8 +401,8 @@ async function confirmBecomeBlogger() {
         <div class="upgrade-box">
           <div class="ub-emoji">🍳</div>
           <div class="ub-title">O'z retseptingizni ulashmoqchimisiz?</div>
-          <div class="ub-sub">Blogger bo'ling — retseptlar qo'shing, auditoriya to'plang</div>
-          <button @click="openBloggerModal" class="btn-upgrade">👨‍🍳 Blogger bo'lish</button>
+          <div class="ub-sub">Oshpaz bo'ling — retseptlar qo'shing, hammaga ko'rsating</div>
+          <button @click="openBloggerModal" class="btn-upgrade">👨‍🍳 Oshpaz bo'lish</button>
         </div>
       </div>
 
@@ -379,7 +414,17 @@ async function confirmBecomeBlogger() {
     <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal"
       @close="showRecipeModal = false" @saved="handleRecipeSaved" />
 
-    <!-- Blogger modal -->
+    <!-- Delete confirm -->
+    <ConfirmModal
+      :show="showDeleteModal"
+      :message="lang.t('common.confirm_delete')"
+      confirm-label="Ha, o'chirish"
+      :danger="true"
+      @confirm="confirmDeleteRecipe"
+      @cancel="showDeleteModal = false"
+    />
+
+    <!-- Oshpaz bo'lish modal -->
     <Teleport to="body">
       <Transition name="mfade">
         <div v-if="showBloggerModal" class="modal-overlay" @click.self="showBloggerModal = false">
@@ -387,7 +432,7 @@ async function confirmBecomeBlogger() {
             <div class="modal-head">
               <div class="mh-icon">👨‍🍳</div>
               <div>
-                <div class="mh-title">Blogger bo'lish</div>
+                <div class="mh-title">Oshpaz bo'lish</div>
                 <div class="mh-sub">Shartlarni o'qib, tasdiqlang</div>
               </div>
               <button class="modal-x" @click="showBloggerModal = false">✕</button>
@@ -395,9 +440,9 @@ async function confirmBecomeBlogger() {
 
             <div class="blogger-perks">
               <div class="perk">📝 Retsept qo'shish va tahrirlash</div>
-              <div class="perk">🌍 Retseptlar barcha userlarga ko'rinadi</div>
+              <div class="perk">🌍 Retseptlar barcha foydalanuvchilarga ko'rinadi</div>
               <div class="perk">📊 Ko'rishlar va baholarni kuzatish</div>
-              <div class="perk">🏷️ Profilda "Blogger" belgisi</div>
+              <div class="perk">🏷️ Profilda "Oshpaz" belgisi</div>
             </div>
 
             <div class="terms-scroll" @scroll="onTermsScroll">
@@ -407,20 +452,55 @@ async function confirmBecomeBlogger() {
                 <li>Boshqalarning mualliflik huquqini buzuvchi kontent yuklab bo'lmaydi.</li>
                 <li>Retseptlar haqiqiy va sog'lom bo'lishi kerak.</li>
                 <li>Spam, haqoratli yoki zararli kontent man etiladi.</li>
-                <li>Qoidabuzarlik holatida blogger statusidan mahrum etilasiz.</li>
+                <li>Qoidabuzarlik holatida oshpaz statusidan mahrum etilasiz.</li>
                 <li>Maxfiylik siyosatimizga to'liq rozilik bildirasiz.</li>
               </ol>
               <div v-if="!termsScrolled" class="terms-hint">↓ O'qishni davom eting</div>
             </div>
 
             <div v-if="bloggerError" class="msg-error">{{ bloggerError }}</div>
-            <div v-if="bloggerSuccess" class="msg-ok">🎉 Tabriklaymiz! Siz endi Bloggersiz!</div>
+            <div v-if="bloggerSuccess" class="msg-ok">🎉 Tabriklaymiz! Siz endi Oshpazsiz!</div>
 
             <div class="modal-foot">
               <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">Bekor qilish</button>
               <button @click="confirmBecomeBlogger" class="btn-confirm" :disabled="!termsScrolled || bloggerLoading">
                 <span v-if="bloggerLoading" class="spin" />
                 {{ bloggerLoading ? 'Saqlanmoqda...' : 'Qabul qilaman ✓' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Oshpazlikdan chiqish modal -->
+      <Transition name="mfade">
+        <div v-if="showLeaveModal" class="modal-overlay" @click.self="showLeaveModal = false">
+          <div class="modal-box modal-box-sm">
+            <div class="modal-head">
+              <div class="mh-icon mh-icon-warn">⚠️</div>
+              <div>
+                <div class="mh-title">Oshpazlikdan chiqish</div>
+                <div class="mh-sub">Bu amalni tasdiqlaysizmi?</div>
+              </div>
+              <button class="modal-x" @click="showLeaveModal = false">✕</button>
+            </div>
+
+            <div class="leave-info">
+              <p>Oshpaz statusidan chiqqach:</p>
+              <ul>
+                <li>Yangi retsept qo'sha olmaysiz</li>
+                <li>Mavjud retseptlaringiz saqlanib qoladi</li>
+                <li>Xohlasangiz yana Oshpaz bo'lishingiz mumkin</li>
+              </ul>
+            </div>
+
+            <div v-if="leaveError" class="msg-error">{{ leaveError }}</div>
+
+            <div class="modal-foot">
+              <button @click="showLeaveModal = false" class="btn-ghost" :disabled="leaveLoading">Bekor qilish</button>
+              <button @click="confirmLeaveOshpaz" class="btn-leave" :disabled="leaveLoading">
+                <span v-if="leaveLoading" class="spin" />
+                {{ leaveLoading ? 'Saqlanmoqda...' : 'Ha, chiqaman' }}
               </button>
             </div>
           </div>
@@ -675,6 +755,53 @@ async function confirmBecomeBlogger() {
 .ba-icon  { font-size: 28px; flex-shrink: 0; }
 .ba-title { font-size: 14px; font-weight: 800; color: #4ade80; }
 .ba-sub   { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+.ba-leave-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(239,68,68,0.25);
+  background: rgba(239,68,68,0.07);
+  color: #f87171;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.ba-leave-btn svg { width: 13px; height: 13px; }
+.ba-leave-btn:hover { background: rgba(239,68,68,0.15); }
+
+/* Leave modal */
+.modal-box-sm { max-width: 380px; }
+.mh-icon-warn { background: rgba(245,158,11,0.12) !important; }
+.leave-info {
+  padding: 0 24px 4px;
+  font-size: 13px;
+  color: var(--tx-4);
+  line-height: 1.6;
+}
+.leave-info ul { margin: 8px 0 0 16px; display: flex; flex-direction: column; gap: 4px; }
+.btn-leave {
+  flex: 1;
+  padding: 11px 16px;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 12px;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+.btn-leave:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
+.btn-leave:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── SECTION ── */
 .section { display: flex; flex-direction: column; gap: 14px; }

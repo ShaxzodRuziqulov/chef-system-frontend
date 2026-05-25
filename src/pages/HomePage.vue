@@ -4,6 +4,7 @@ import { recipesApi    } from '@/api/recipes'
 import { categoriesApi } from '@/api/categories'
 import { favoritesApi  } from '@/api/favorites'
 import RecipeCard        from '@/components/recipe/RecipeCard.vue'
+import RecipeFormModal   from '@/components/recipe/RecipeFormModal.vue'
 import { useLangStore }  from '@/stores/langStore'
 import { useAuthStore }  from '@/stores/authStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
@@ -13,12 +14,32 @@ const auth      = useAuthStore()
 const favorites = useFavoritesStore()
 
 // ── Data ──────────────────────────────────────────────────────────
-const popular       = ref([])
-const favRecipes    = ref([])
-const myRecipes     = ref([])
-const categories    = ref([])
-const myRecipeCount = ref(0)
-const loading       = ref(true)
+const popular        = ref([])
+const favRecipes     = ref([])
+const myRecipes      = ref([])
+const categories     = ref([])
+const myRecipeCount  = ref(0)
+const loading        = ref(true)
+
+// ── Recipe Modal ──────────────────────────────────────────────────
+const showRecipeModal = ref(false)
+const editingRecipe   = ref(null)
+
+function openCreateRecipe() {
+  editingRecipe.value   = null
+  showRecipeModal.value = true
+}
+
+async function handleRecipeSaved() {
+  showRecipeModal.value = false
+  // Mening retseptlarim ro'yxatini yangilash
+  if (auth.isBlogger) {
+    const res = await recipesApi.getMy({ page: 0, size: 8 })
+    const d = res.data?.data ?? res.data
+    myRecipes.value     = d?.content      ?? []
+    myRecipeCount.value = d?.totalElements ?? 0
+  }
+}
 
 // ── Greeting ──────────────────────────────────────────────────────
 const hour = new Date().getHours()
@@ -30,8 +51,8 @@ const greeting = computed(() => {
 })
 
 const roleBadge = computed(() => {
-  if (auth.isAdmin)   return { label: 'Admin',   cls: 'role-admin' }
-  if (auth.isBlogger) return { label: 'Blogger', cls: 'role-blogger' }
+  if (auth.isAdmin)   return { label: 'Admin',  cls: 'role-admin' }
+  if (auth.isBlogger) return { label: 'Oshpaz', cls: 'role-blogger' }
   return null
 })
 
@@ -60,13 +81,13 @@ function catIcon(cat) {
 onMounted(async () => {
   try {
     const calls = [
-      recipesApi.getAll({ page: 0, size: 4 }),
+      recipesApi.getAll({ page: 0, size: 8, sort: ['averageRating,desc', 'viewCount,desc'] }),
       categoriesApi.getAll(),
     ]
     if (auth.isAuthenticated) {
-      calls.push(favoritesApi.getAll({ page: 0, size: 4 }))
+      calls.push(favoritesApi.getAll({ page: 0, size: 8 }))
       if (auth.isBlogger) {
-        calls.push(recipesApi.getMy({ page: 0, size: 4 }))
+        calls.push(recipesApi.getMy({ page: 0, size: 8 }))
       }
     }
     const results = await Promise.allSettled(calls)
@@ -126,10 +147,10 @@ onMounted(async () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg>
           {{ lang.t('home.btn_browse') }}
         </RouterLink>
-        <RouterLink v-if="auth.isBlogger" to="/app/recipes/create" class="qa-btn qa-create">
+        <button v-if="auth.isBlogger" @click="openCreateRecipe" class="qa-btn qa-create">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
           {{ lang.t('home.btn_create') }}
-        </RouterLink>
+        </button>
         <RouterLink to="/app/meal-plans" class="qa-btn qa-ghost">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           {{ lang.t('nav.meal_plan') }}
@@ -139,14 +160,14 @@ onMounted(async () => {
 
     <!-- ── Personal Stats ── (only when logged in) -->
     <div v-if="auth.isAuthenticated" class="stats-row">
-      <RouterLink to="/app/favorites" class="stat-card stat-link">
+      <RouterLink to="/app/saved" class="stat-card stat-link">
         <span class="stat-icon">❤️</span>
         <div>
           <div class="stat-num">{{ favorites.count }}</div>
           <div class="stat-label">{{ lang.t('home.stat_fav') }}</div>
         </div>
       </RouterLink>
-      <RouterLink v-if="auth.isBlogger" to="/app/my-recipes" class="stat-card stat-link">
+      <RouterLink v-if="auth.isBlogger" to="/app/recipes" class="stat-card stat-link">
         <span class="stat-icon">📖</span>
         <div>
           <div class="stat-num">{{ loading ? '—' : myRecipeCount }}</div>
@@ -160,7 +181,7 @@ onMounted(async () => {
           <div class="stat-label">{{ lang.t('nav.meal_plan') }}</div>
         </div>
       </RouterLink>
-      <RouterLink to="/app/shopping-list" class="stat-card stat-link">
+      <RouterLink to="/app/shopping-lists" class="stat-card stat-link">
         <span class="stat-icon">🛒</span>
         <div>
           <div class="stat-num">Auto</div>
@@ -177,14 +198,14 @@ onMounted(async () => {
           {{ lang.t('home.saved') }}
           <span v-if="favorites.count > 0" class="section-count">{{ favorites.count }}</span>
         </h2>
-        <RouterLink v-if="favorites.count > 0" to="/app/favorites" class="section-link">
+        <RouterLink v-if="favorites.count > 0" to="/app/saved" class="section-link">
           {{ lang.t('home.view_all') }}
         </RouterLink>
       </div>
 
       <!-- Loading -->
       <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
       </div>
 
       <!-- Has favorites -->
@@ -208,16 +229,16 @@ onMounted(async () => {
           {{ lang.t('home.my_recipes') }}
         </h2>
         <div class="section-header-right">
-          <RouterLink to="/app/recipes/create" class="btn-create-sm">
+          <button @click="openCreateRecipe" class="btn-create-sm">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             {{ lang.t('home.btn_create') }}
-          </RouterLink>
-          <RouterLink v-if="myRecipeCount > 4" to="/app/my-recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
+          </button>
+          <RouterLink v-if="myRecipeCount > 4" to="/app/recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
         </div>
       </div>
 
       <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
       </div>
       <div v-else-if="myRecipes.length" class="recipe-grid-sm">
         <RecipeCard v-for="r in myRecipes" :key="r.id" :recipe="r" />
@@ -225,7 +246,7 @@ onMounted(async () => {
       <div v-else class="empty-inline">
         <span class="empty-inline-icon">✍️</span>
         <span class="empty-inline-text">{{ lang.t('home.no_my') }}</span>
-        <RouterLink to="/app/recipes/create" class="empty-inline-link">{{ lang.t('home.btn_create') }}</RouterLink>
+        <button @click="openCreateRecipe" class="empty-inline-link empty-inline-btn">{{ lang.t('home.btn_create') }}</button>
       </div>
     </section>
 
@@ -265,7 +286,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
       </div>
       <div v-else-if="popular.length" class="recipe-grid-sm">
         <RecipeCard v-for="r in popular" :key="r.id" :recipe="r" />
@@ -277,6 +298,14 @@ onMounted(async () => {
     </section>
 
   </div>
+
+  <!-- Recipe create/edit modal -->
+  <RecipeFormModal
+    :recipe="editingRecipe"
+    :visible="showRecipeModal"
+    @close="showRecipeModal = false"
+    @saved="handleRecipeSaved"
+  />
 </template>
 
 <style scoped>
@@ -473,20 +502,27 @@ onMounted(async () => {
 .btn-create-sm svg { width: 12px; height: 12px; }
 .btn-create-sm:hover { background: rgba(216,90,48,0.2); }
 
-/* ── Recipe Grid (2×2 / 4 col) ── */
+/* ── Recipe horizontal scroll row ── */
 .recipe-grid-sm {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+.recipe-grid-sm::-webkit-scrollbar { display: none; }
+.recipe-grid-sm > :deep(.recipe-card) {
+  flex: 0 0 240px;
+  width: 240px;
 }
 .recipe-skeleton {
+  flex: 0 0 240px;
+  width: 240px;
   border-radius: 20px;
-  height: 220px;
+  height: 260px;
   background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
-@media (max-width: 1024px) { .recipe-grid-sm { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 480px)  { .recipe-grid-sm { grid-template-columns: repeat(1, 1fr); } }
 
 /* ── Empty Inline ── */
 .empty-inline {
@@ -510,6 +546,12 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .empty-inline-link:hover { color: #F0997B; }
+.empty-inline-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
 
 /* ── Categories ── */
 .cat-scroll {

@@ -10,6 +10,7 @@ import { usersApi }        from '@/api/users'
 import { uploadApi }       from '@/api/upload'
 import { useRouter }       from 'vue-router'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
+import ConfirmModal        from '@/components/ui/ConfirmModal.vue'
 import ImgUpload           from '@/components/ui/ImgUpload.vue'
 import { useToast }        from '@/composables/useToast'
 import { resolveImageUrl } from '@/utils/imageUrl'
@@ -50,6 +51,40 @@ const categories = ref([])
 const tags       = ref([])
 const loading    = ref(true)
 const deleting   = ref(null)
+
+// ── Delete Confirm Modal ──────────────────────────────────────────
+const confirmDel = ref({ show: false, id: null, type: '' })
+
+function askDelete(type, id) {
+  confirmDel.value = { show: true, id, type }
+}
+
+async function doDelete() {
+  const { type, id } = confirmDel.value
+  confirmDel.value.show = false
+  deleting.value = type === 'recipe' ? id : `${type}-${id}`
+  try {
+    if (type === 'recipe') {
+      await recipesApi.delete(id)
+      recipes.value = recipes.value.filter(r => r.id !== id)
+      toast.success(lang.t('admin.deleted'))
+    } else if (type === 'cat') {
+      await categoriesApi.delete(id)
+      categories.value = categories.value.filter(c => c.id !== id)
+      toast.success(lang.t('admin.cat_deleted'))
+    } else if (type === 'tag') {
+      await tagsApi.delete(id)
+      tags.value = tags.value.filter(t => t.id !== id)
+      toast.success(lang.t('admin.tag_deleted'))
+    } else if (type === 'ing') {
+      await ingredientsApi.delete(id)
+      ingredients.value = ingredients.value.filter(i => i.id !== id)
+      ingTotal.value = Math.max(0, ingTotal.value - 1)
+      toast.success(lang.t('admin.ing_deleted'))
+    }
+  } catch { toast.error(lang.t('common.error_delete')) }
+  finally  { deleting.value = null }
+}
 
 // ── Recipe Form Modal ─────────────────────────────────────────────
 const showRecipeModal = ref(false)
@@ -98,15 +133,6 @@ async function loadRecipes() {
   } finally { loading.value = false }
 }
 
-async function deleteRecipe(id) {
-  deleting.value = id
-  try {
-    await recipesApi.delete(id)
-    recipes.value = recipes.value.filter(r => r.id !== id)
-    toast.success(lang.t('admin.deleted'))
-  } catch { toast.error(lang.t('admin.delete_error')) }
-  finally  { deleting.value = null }
-}
 
 // ── API: Categories ───────────────────────────────────────────────
 const catForm    = ref(emptyCatForm())
@@ -148,15 +174,6 @@ async function saveCat() {
   } finally { catSaving.value = false }
 }
 
-async function deleteCat(id) {
-  deleting.value = 'cat-' + id
-  try {
-    await categoriesApi.delete(id)
-    categories.value = categories.value.filter(c => c.id !== id)
-    toast.success(lang.t('admin.cat_deleted'))
-  } catch { toast.error(lang.t('common.error_delete')) }
-  finally  { deleting.value = null }
-}
 
 // ── API: Tags ─────────────────────────────────────────────────────
 const tagForm    = ref(emptyTagForm())
@@ -198,15 +215,6 @@ async function saveTag() {
   } finally { tagSaving.value = false }
 }
 
-async function deleteTag(id) {
-  deleting.value = 'tag-' + id
-  try {
-    await tagsApi.delete(id)
-    tags.value = tags.value.filter(t => t.id !== id)
-    toast.success(lang.t('admin.tag_deleted'))
-  } catch { toast.error(lang.t('common.error_delete')) }
-  finally  { deleting.value = null }
-}
 
 // ── API: Ingredients ──────────────────────────────────────────────
 const ingredients    = ref([])
@@ -304,16 +312,6 @@ async function saveIng() {
   } finally { ingSaving.value = false }
 }
 
-async function deleteIng(id) {
-  deleting.value = 'ing-' + id
-  try {
-    await ingredientsApi.delete(id)
-    ingredients.value = ingredients.value.filter(i => i.id !== id)
-    ingTotal.value = Math.max(0, ingTotal.value - 1)
-    toast.success(lang.t('admin.ing_deleted'))
-  } catch { toast.error(lang.t('common.error_delete')) }
-  finally  { deleting.value = null }
-}
 
 let ingSearchTimer = null
 function onIngSearch() {
@@ -540,7 +538,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <button @click="openEditRecipe(r)" class="btn-edit-row">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
-            <button @click="deleteRecipe(r.id)" class="btn-delete" :disabled="deleting === r.id">
+            <button @click="askDelete('recipe', r.id)" class="btn-delete" :disabled="deleting === r.id">
               <span v-if="deleting === r.id" class="spinner" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
@@ -593,7 +591,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <button @click="editCat(c)" class="btn-edit-row">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
-            <button @click="deleteCat(c.id)" class="btn-delete" :disabled="deleting === 'cat-'+c.id">
+            <button @click="askDelete('cat', c.id)" class="btn-delete" :disabled="deleting === 'cat-'+c.id">
               <span v-if="deleting === 'cat-'+c.id" class="spinner" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
@@ -634,7 +632,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <button @click="editTag(t)" class="btn-edit-row">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
-            <button @click="deleteTag(t.id)" class="btn-delete" :disabled="deleting === 'tag-'+t.id">
+            <button @click="askDelete('tag', t.id)" class="btn-delete" :disabled="deleting === 'tag-'+t.id">
               <span v-if="deleting === 'tag-'+t.id" class="spinner" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
@@ -685,7 +683,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
             <button @click="editIng(ing)" class="btn-edit-row">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </button>
-            <button @click="deleteIng(ing.id)" class="btn-delete" :disabled="deleting === 'ing-'+ing.id">
+            <button @click="askDelete('ing', ing.id)" class="btn-delete" :disabled="deleting === 'ing-'+ing.id">
               <span v-if="deleting === 'ing-'+ing.id" class="spinner" />
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </button>
@@ -980,6 +978,15 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
     </Teleport>
 
     <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal" @close="showRecipeModal=false" @saved="handleRecipeSaved" />
+
+    <ConfirmModal
+      :show="confirmDel.show"
+      :message="lang.t('common.confirm_delete')"
+      confirm-label="Ha, o'chirish"
+      :danger="true"
+      @confirm="doDelete"
+      @cancel="confirmDel.show = false"
+    />
   </div>
 </template>
 

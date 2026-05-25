@@ -41,6 +41,20 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept':       'application/json',
   },
+  // Spring Boot Pageable uchun: sort=field,dir&sort=field2,dir2
+  paramsSerializer: (params) => {
+    const parts: string[] = []
+    for (const [key, val] of Object.entries(params)) {
+      if (val === undefined || val === null || val === '') continue
+      if (Array.isArray(val)) {
+        // sort=['averageRating,desc','viewCount,desc'] → sort=averageRating,desc&sort=viewCount,desc
+        val.forEach(v => parts.push(`${encodeURIComponent(key)}=${v}`))
+      } else {
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(val))}`)
+      }
+    }
+    return parts.join('&')
+  },
 })
 
 // ─────────────────────────────────────────────────────────────────

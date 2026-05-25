@@ -12,7 +12,7 @@ import type {
 interface RecipeParams {
   page?: number
   size?: number
-  sort?: string
+  sort?: string | string[]
 }
 
 type RecipePageResponse = AxiosResponse<ApiResponse<Page<RecipeDto>>>

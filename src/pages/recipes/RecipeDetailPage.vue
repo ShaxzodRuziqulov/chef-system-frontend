@@ -10,6 +10,7 @@ import { recipesApi }                      from '@/api/recipes'
 import { ratingsApi }                      from '@/api/ratings'
 import { commentsApi }                     from '@/api/comments'
 import RecipeFormModal                     from '@/components/recipe/RecipeFormModal.vue'
+import ConfirmModal                        from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }                 from '@/utils/imageUrl'
 
 const route     = useRoute()
@@ -29,22 +30,23 @@ const loading = ref(true)
 const tab     = ref('ingredients')
 
 // ── Modal / actions ───────────────────────────────────────────────
-const showFormModal = ref(false)
-const deleting      = ref(false)
+const showFormModal   = ref(false)
+const deleting        = ref(false)
+const showDeleteModal = ref(false)
 
 const canEdit = computed(() =>
   auth.isAuthenticated &&
   (auth.isAdmin || (auth.isBlogger && String(auth.user?.id) === String(recipe.value?.authorId)))
 )
 
-async function deleteRecipe() {
-  if (!confirm(lang.t('common.confirm_delete'))) return
+async function confirmDeleteRecipe() {
+  showDeleteModal.value = false
   deleting.value = true
   try {
     await recipesApi.delete(recipe.value.id)
     router.push('/app/recipes')
   } catch {
-    alert(lang.t('common.error_delete'))
+    toast.error(lang.t('common.error_delete'))
   } finally {
     deleting.value = false
   }
@@ -228,7 +230,7 @@ onMounted(async () => {
   <div v-else-if="recipe" class="detail-wrap">
 
     <!-- Back -->
-    <button @click="router.back()" class="back-btn">
+    <button @click="router.push('/app/recipes')" class="back-btn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m7-7l-7 7 7 7"/>
       </svg>
@@ -315,7 +317,7 @@ onMounted(async () => {
           </svg>
           {{ lang.t('recipe.edit') }}
         </button>
-        <button @click="deleteRecipe" :disabled="deleting" class="btn-action btn-del-recipe">
+        <button @click="showDeleteModal = true" :disabled="deleting" class="btn-action btn-del-recipe">
           <span v-if="deleting" class="act-spinner" />
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -530,6 +532,16 @@ onMounted(async () => {
     :visible="showFormModal"
     @close="showFormModal = false"
     @saved="handleSaved"
+  />
+
+  <!-- Delete Confirm Modal -->
+  <ConfirmModal
+    :show="showDeleteModal"
+    :message="lang.t('common.confirm_delete')"
+    confirm-label="Ha, o'chirish"
+    :danger="true"
+    @confirm="confirmDeleteRecipe"
+    @cancel="showDeleteModal = false"
   />
 
 </template>
