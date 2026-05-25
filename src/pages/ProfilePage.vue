@@ -1,94 +1,123 @@
 <script setup>
-import { ref, onMounted }  from 'vue'
-import { useAuthStore }    from '@/stores/authStore'
-import { useLangStore }    from '@/stores/langStore'
-import { recipesApi }      from '@/api/recipes'
-import { uploadApi }       from '@/api/upload'
-import { mealPlansApi }    from '@/api/mealPlans'
-import { authApi }         from '@/api/auth'
-import RecipeCard          from '@/components/recipe/RecipeCard.vue'
-import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
-import { resolveImageUrl } from '@/utils/imageUrl'
+import { ref, computed, onMounted } from 'vue'
+import { useAuthStore }             from '@/stores/authStore'
+import { useLangStore }             from '@/stores/langStore'
+import { useFavoritesStore }        from '@/stores/favoritesStore'
+import { recipesApi }               from '@/api/recipes'
+import { uploadApi }                from '@/api/upload'
+import { mealPlansApi }             from '@/api/mealPlans'
+import { authApi }                  from '@/api/auth'
+import RecipeCard                   from '@/components/recipe/RecipeCard.vue'
+import RecipeFormModal              from '@/components/recipe/RecipeFormModal.vue'
+import { resolveImageUrl }          from '@/utils/imageUrl'
 
-const auth          = useAuthStore()
-const lang          = useLangStore()
+const auth      = useAuthStore()
+const lang      = useLangStore()
+const favorites = useFavoritesStore()
+
 const recipes       = ref([])
 const mealPlanCount = ref(0)
 const loading       = ref(true)
+const deletingId    = ref(null)
 
-// ── Profile edit modal ────────────────────────────────────────────
-const showEdit       = ref(false)
-const editForm       = ref({ fullName: '', avatarUrl: '' })
-const saveError      = ref('')
-const saveSuccess    = ref(false)
-const saving         = ref(false)
-const avatarPreview   = ref('')       // yangi tanlangan rasm preview URL
-const avatarUploading = ref(false)   // rasm yuklanmoqda
-const avatarInput     = ref(null)    // hidden file input
-
-// ── Password change ───────────────────────────────────────────────
-const pwForm      = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
-const pwError     = ref('')
-const pwSuccess   = ref(false)
-const pwSaving    = ref(false)
-const showPwForm  = ref(false)
-
-// ── Recipe form modal ─────────────────────────────────────────────
+// ── Recipe form ───────────────────────────────────────────────────
 const showRecipeModal = ref(false)
 const editingRecipe   = ref(null)
-const deletingId      = ref(null)
 
+// ── Edit profile modal ────────────────────────────────────────────
+const showEdit        = ref(false)
+const editForm        = ref({ fullName: '', avatarUrl: '' })
+const saveError       = ref('')
+const saveSuccess     = ref(false)
+const saving          = ref(false)
+const avatarPreview   = ref('')
+const avatarUploading = ref(false)
+const avatarInput     = ref(null)
+
+// ── Password ──────────────────────────────────────────────────────
+const showPwForm = ref(false)
+const pwForm     = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
+const pwError    = ref('')
+const pwSuccess  = ref(false)
+const pwSaving   = ref(false)
+
+// ── Blogger modal ─────────────────────────────────────────────────
+const showBloggerModal = ref(false)
+const termsScrolled    = ref(false)
+const bloggerLoading   = ref(false)
+const bloggerError     = ref('')
+const bloggerSuccess   = ref(false)
+
+// ── Computed ──────────────────────────────────────────────────────
+const roleLabel = computed(() => {
+  if (auth.isAdmin)   return { text: 'Admin',          icon: '👑', cls: 'role-admin' }
+  if (auth.isBlogger) return { text: 'Blogger',        icon: '👨‍🍳', cls: 'role-blogger' }
+  return               { text: 'Foydalanuvchi',        icon: '👤', cls: 'role-user' }
+})
+
+const memberSince = computed(() => {
+  const d = auth.user?.createdAt
+  if (!d) return ''
+  return new Date(d).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long' })
+})
+
+const statsData = computed(() => [
+  { icon: '📝', val: recipes.value.length,    lbl: 'Retseptlar'   },
+  { icon: '❤️',  val: favorites.count,         lbl: 'Saqlangan'    },
+  { icon: '📅', val: mealPlanCount.value,     lbl: 'Meal planlar' },
+])
+
+// ── Lifecycle ─────────────────────────────────────────────────────
 onMounted(async () => {
   try {
     await auth.fetchUser()
-    await Promise.all([loadMyRecipes(), loadMealPlanCount()])
+    const ps = [loadMealPlanCount()]
+    if (auth.isBlogger) ps.push(loadMyRecipes())
+    if (!favorites.loaded) ps.push(favorites.loadIds())
+    await Promise.all(ps)
   } finally {
     loading.value = false
   }
 })
 
 async function loadMyRecipes() {
-  const r = await recipesApi.getMy({ page: 0, size: 20 })
-  recipes.value = (r.data?.data ?? r.data)?.content ?? []
+  try {
+    const r = await recipesApi.getMy({ page: 0, size: 20 })
+    recipes.value = (r.data?.data ?? r.data)?.content ?? []
+  } catch { recipes.value = [] }
 }
 
 async function loadMealPlanCount() {
   try {
     const res = await mealPlansApi.getMy({ page: 0, size: 1 })
-    const data = res.data?.data ?? res.data
-    mealPlanCount.value = data?.totalElements ?? 0
+    mealPlanCount.value = (res.data?.data ?? res.data)?.totalElements ?? 0
   } catch { mealPlanCount.value = 0 }
 }
 
+// ── Profile edit ──────────────────────────────────────────────────
 function openEdit() {
-  editForm.value    = {
-    fullName:  auth.user?.fullName  ?? '',
-    avatarUrl: auth.avatarUrl       ?? '',
-  }
-  avatarPreview.value  = auth.avatarUrl ?? ''
-  saveError.value      = ''
-  saveSuccess.value    = false
-  showPwForm.value     = false
-  pwForm.value         = { currentPassword: '', newPassword: '', confirmPassword: '' }
-  pwError.value        = ''
-  pwSuccess.value      = false
-  showEdit.value       = true
+  editForm.value   = { fullName: auth.user?.fullName ?? '', avatarUrl: auth.avatarUrl ?? '' }
+  avatarPreview.value = auth.avatarUrl ?? ''
+  saveError.value  = ''
+  saveSuccess.value = false
+  showPwForm.value = false
+  pwForm.value     = { currentPassword: '', newPassword: '', confirmPassword: '' }
+  pwError.value    = ''
+  pwSuccess.value  = false
+  showEdit.value   = true
 }
 
 async function onAvatarFileChange(e) {
   const file = e.target.files?.[0]
   if (!file) return
-
-  // Local preview
   avatarPreview.value = URL.createObjectURL(file)
   avatarUploading.value = true
   saveError.value = ''
   try {
     const res = await uploadApi.image(file)
-    const url = res.data?.data?.url ?? res.data?.url
-    editForm.value.avatarUrl = url
+    editForm.value.avatarUrl = res.data?.data?.url ?? res.data?.url
   } catch {
-    saveError.value = 'Rasm yuklanmadi. Qaytadan urinib ko\'ring.'
+    saveError.value = 'Rasm yuklanmadi'
     avatarPreview.value = editForm.value.avatarUrl
   } finally {
     avatarUploading.value = false
@@ -96,70 +125,44 @@ async function onAvatarFileChange(e) {
 }
 
 async function saveProfile() {
-  saving.value      = true
-  saveError.value   = ''
-  saveSuccess.value = false
+  saving.value = true; saveError.value = ''; saveSuccess.value = false
   const err = await auth.updateProfile({
     fullName:  editForm.value.fullName  || undefined,
     avatarUrl: editForm.value.avatarUrl || undefined,
   })
   saving.value = false
-  if (err) {
-    saveError.value = err
-  } else {
+  if (err) { saveError.value = err }
+  else {
     saveSuccess.value = true
-    await auth.fetchUser()   // serverdan yangilangan ma'lumotni qayta yuklaymiz
+    await auth.fetchUser()
     setTimeout(() => { showEdit.value = false; saveSuccess.value = false }, 1000)
   }
 }
 
 async function savePassword() {
-  pwError.value   = ''
-  pwSuccess.value = false
-  if (pwForm.value.newPassword !== pwForm.value.confirmPassword) {
-    pwError.value = lang.t('profile.pw_mismatch')
-    return
-  }
-  if (pwForm.value.newPassword.length < 6) {
-    pwError.value = lang.t('profile.pw_short')
-    return
-  }
+  pwError.value = ''; pwSuccess.value = false
+  if (pwForm.value.newPassword !== pwForm.value.confirmPassword) { pwError.value = lang.t('profile.pw_mismatch'); return }
+  if (pwForm.value.newPassword.length < 6) { pwError.value = lang.t('profile.pw_short'); return }
   pwSaving.value = true
   try {
-    await authApi.changePassword({
-      currentPassword: pwForm.value.currentPassword,
-      newPassword:     pwForm.value.newPassword,
-    })
+    await authApi.changePassword({ currentPassword: pwForm.value.currentPassword, newPassword: pwForm.value.newPassword })
     pwSuccess.value = true
     pwForm.value = { currentPassword: '', newPassword: '', confirmPassword: '' }
     setTimeout(() => { pwSuccess.value = false }, 2000)
   } catch (e) {
     pwError.value = e?.response?.data?.message || 'Parol o\'zgartirishda xatolik'
-  } finally {
-    pwSaving.value = false
-  }
+  } finally { pwSaving.value = false }
 }
 
-function openCreateRecipe() {
-  editingRecipe.value   = null
-  showRecipeModal.value = true
-}
-
-function openEditRecipe(recipe) {
-  editingRecipe.value   = recipe
-  showRecipeModal.value = true
-}
+// ── Recipes ───────────────────────────────────────────────────────
+function openCreateRecipe() { editingRecipe.value = null; showRecipeModal.value = true }
+function openEditRecipe(r)  { editingRecipe.value = r;    showRecipeModal.value = true }
 
 function handleRecipeSaved(saved) {
   showRecipeModal.value = false
-  if (editingRecipe.value) {
-    // update in-place
-    const idx = recipes.value.findIndex(r => r.id === saved.id)
-    if (idx !== -1) recipes.value[idx] = saved
-    else recipes.value.unshift(saved)
-  } else {
-    recipes.value.unshift(saved)
-  }
+  const idx = recipes.value.findIndex(r => r.id === saved.id)
+  if (idx !== -1) recipes.value[idx] = saved
+  else recipes.value.unshift(saved)
   editingRecipe.value = null
 }
 
@@ -169,45 +172,25 @@ async function deleteRecipe(id) {
   try {
     await recipesApi.delete(id)
     recipes.value = recipes.value.filter(r => r.id !== id)
-  } catch {
-    alert(lang.t('common.error_delete'))
-  } finally {
-    deletingId.value = null
-  }
+  } catch { alert(lang.t('common.error_delete')) }
+  finally  { deletingId.value = null }
 }
 
-const stats = [
-  { icon: '📝', label: () => lang.t('profile.stat_recipes'), val: () => recipes.value.length },
-  { icon: '📅', label: () => lang.t('profile.stat_meal'),    val: () => mealPlanCount.value },
-]
-
-// ── Blogger modal ─────────────────────────────────────────────────
-const showBloggerModal  = ref(false)
-const termsScrolled     = ref(false)
-const bloggerLoading    = ref(false)
-const bloggerError      = ref('')
-const bloggerSuccess    = ref(false)
-
+// ── Blogger ───────────────────────────────────────────────────────
 function openBloggerModal() {
-  termsScrolled.value  = false
-  bloggerError.value   = ''
-  bloggerSuccess.value = false
+  termsScrolled.value = false; bloggerError.value = ''; bloggerSuccess.value = false
   showBloggerModal.value = true
 }
-
 function onTermsScroll(e) {
   const el = e.target
   termsScrolled.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 20
 }
-
 async function confirmBecomeBlogger() {
-  bloggerLoading.value = true
-  bloggerError.value   = ''
+  bloggerLoading.value = true; bloggerError.value = ''
   const err = await auth.becomeBlogger()
   bloggerLoading.value = false
-  if (err) {
-    bloggerError.value = err
-  } else {
+  if (err) { bloggerError.value = err }
+  else {
     bloggerSuccess.value = true
     await auth.fetchUser()
     setTimeout(() => { showBloggerModal.value = false; bloggerSuccess.value = false }, 1800)
@@ -218,267 +201,226 @@ async function confirmBecomeBlogger() {
 <template>
   <div class="page">
 
-    <!-- Skeleton -->
-    <div v-if="loading" class="skeleton-wrap">
-      <div class="skel-cover" />
-      <div class="skel-body">
-        <div class="skel-avatar" />
-        <div class="skel-name" />
-        <div class="skel-sub" />
+    <!-- ══════════════ SKELETON ══════════════ -->
+    <div v-if="loading" class="skel-page">
+      <div class="skel-hero" />
+      <div class="skel-info">
+        <div class="skel-ava" />
+        <div class="skel-lines">
+          <div class="skel-line w180" />
+          <div class="skel-line w120" />
+        </div>
       </div>
-      <div class="recipe-grid skel-grid">
-        <div v-for="i in 6" :key="i" class="skel-recipe" />
+      <div class="skel-grid">
+        <div v-for="i in 3" :key="i" class="skel-stat" />
+      </div>
+      <div class="skel-grid">
+        <div v-for="i in 6" :key="i" class="skel-card" />
       </div>
     </div>
 
+    <!-- ══════════════ MAIN ══════════════ -->
     <template v-else-if="auth.user">
 
-      <!-- ── Profile card ── -->
-      <div class="profile-card">
-        <!-- Cover -->
-        <div class="cover">
-          <div class="cover-blob" />
+      <!-- ── HERO CARD ── -->
+      <div class="hero-card">
+        <!-- Cover gradient -->
+        <div class="hero-cover">
+          <div class="cover-pattern" />
+          <div class="cover-glow g1" />
+          <div class="cover-glow g2" />
         </div>
 
-        <!-- Avatar + info -->
-        <div class="profile-body">
-          <div class="avatar-wrap">
-            <div class="avatar">
-              <img
-                v-if="auth.avatarUrl"
-                :src="resolveImageUrl(auth.avatarUrl)"
-                alt="avatar"
-                @error="(e) => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }"
-              />
-              <span :style="auth.avatarUrl ? 'display:none' : ''">{{ auth.initials }}</span>
+        <!-- Avatar zone -->
+        <div class="hero-body">
+          <div class="ava-zone">
+            <div class="ava-ring" :class="roleLabel.cls">
+              <div class="ava-inner">
+                <img v-if="auth.avatarUrl" :src="resolveImageUrl(auth.avatarUrl)" alt="avatar"
+                  @error="e => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }" />
+                <span :style="auth.avatarUrl ? 'display:none' : ''">{{ auth.initials }}</span>
+              </div>
             </div>
-            <div class="avatar-badge"
-              :class="auth.isAdmin ? 'badge-admin' : auth.isBlogger ? 'badge-blogger' : 'badge-user'">
-              {{ auth.isAdmin ? '👑' : auth.isBlogger ? '👨‍🍳' : '🧑' }}
+            <div class="role-pill" :class="roleLabel.cls">
+              {{ roleLabel.icon }} {{ roleLabel.text }}
             </div>
           </div>
 
-          <div class="profile-info">
-            <h1 class="profile-name">{{ auth.displayName }}</h1>
-            <p class="profile-role">
-            {{ auth.isAdmin ? lang.t('profile.admin') : auth.isBlogger ? '👨‍🍳 Blogger' : lang.t('profile.user') }}
-          </p>
+          <!-- Name & meta -->
+          <div class="hero-meta">
+            <h1 class="hero-name">{{ auth.user.fullName || auth.user.username || 'Foydalanuvchi' }}</h1>
+            <div v-if="auth.user.username || memberSince" class="hero-sub-row">
+              <span v-if="auth.user.username" class="meta-chip">@{{ auth.user.username }}</span>
+              <span v-if="memberSince" class="meta-chip">📅 {{ memberSince }}</span>
+            </div>
           </div>
 
           <!-- Stats -->
-          <div class="stats-row">
-            <div v-for="s in stats" :key="s.label" class="stat-item">
-              <div class="stat-icon">{{ s.icon }}</div>
-              <div class="stat-val">{{ s.val() }}</div>
-              <div class="stat-lbl">{{ s.label() }}</div>
+          <div class="stats-bar">
+            <div v-for="s in statsData" :key="s.lbl" class="stat-box">
+              <div class="stat-num">{{ s.val }}</div>
+              <div class="stat-lbl">{{ s.lbl }}</div>
             </div>
           </div>
 
           <!-- Actions -->
-          <div class="profile-actions">
-            <button @click="openEdit" class="btn-edit">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-              </svg>
-              {{ lang.t('profile.edit') }}
+          <div class="hero-actions">
+            <button @click="openEdit" class="btn-action btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+              Profilni tahrirlash
             </button>
-            <button @click="auth.logout()" class="btn-logout">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-              </svg>
-              {{ lang.t('profile.logout') }}
+            <button @click="auth.logout()" class="btn-action btn-danger">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+              Chiqish
             </button>
           </div>
         </div>
       </div>
 
-      <!-- ── Info rows ── -->
+      <!-- ── INFO CARD ── -->
       <div class="info-card">
-        <div class="info-row">
-          <div class="ir-icon">👤</div>
-          <div class="ir-body">
-            <div class="ir-label">{{ lang.t('profile.full_name') }}</div>
-            <div class="ir-val">{{ auth.user.fullName || '—' }}</div>
+        <div v-if="auth.user.email" class="info-row">
+          <div class="info-icon">✉️</div>
+          <div class="info-body">
+            <div class="info-lbl">Email</div>
+            <div class="info-val">{{ auth.user.email }}</div>
+          </div>
+        </div>
+        <div v-if="auth.user.username" class="info-row">
+          <div class="info-icon">🔖</div>
+          <div class="info-body">
+            <div class="info-lbl">Username</div>
+            <div class="info-val">@{{ auth.user.username }}</div>
           </div>
         </div>
         <div class="info-row">
-          <div class="ir-icon">🔑</div>
-          <div class="ir-body">
-            <div class="ir-label">{{ lang.t('profile.role') }}</div>
-            <div class="ir-val">
-              <span class="role-badge"
-                :class="auth.isAdmin ? 'badge-admin' : auth.isBlogger ? 'badge-blogger' : 'badge-user'">
-                {{ auth.isAdmin ? '👑 Admin' : auth.isBlogger ? '👨‍🍳 Blogger' : '👤 Foydalanuvchi' }}
-              </span>
+          <div class="info-icon">🛡️</div>
+          <div class="info-body">
+            <div class="info-lbl">Rol</div>
+            <div class="info-val">
+              <span class="role-badge" :class="roleLabel.cls">{{ roleLabel.icon }} {{ roleLabel.text }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ── Blogger bo'lish banneri (faqat USER uchun) ── -->
-      <div v-if="!auth.isBlogger" class="blogger-banner" @click="openBloggerModal">
-        <div class="bb-left">
-          <div class="bb-icon">👨‍🍳</div>
-          <div class="bb-text">
-            <div class="bb-title">Blogger bo'lish</div>
-            <div class="bb-sub">Retseptlaringizni hammaga ulashing va o'z auditoriyangizni to'plang</div>
+      <!-- ── BLOGGER BANNER (USER uchun) ── -->
+      <div v-if="!auth.isBlogger" class="blogger-cta" @click="openBloggerModal">
+        <div class="bcta-left">
+          <div class="bcta-emoji">👨‍🍳</div>
+          <div>
+            <div class="bcta-title">Blogger bo'lish</div>
+            <div class="bcta-sub">Retseptlaringizni ulashing, auditoriya to'plang</div>
           </div>
         </div>
-        <div class="bb-arrow">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/>
-          </svg>
+        <div class="bcta-arrow">›</div>
+      </div>
+
+      <!-- ── BLOGGER ACTIVE (BLOGGER uchun) ── -->
+      <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active">
+        <span class="ba-icon">✅</span>
+        <div>
+          <div class="ba-title">Tasdiqlangan Blogger</div>
+          <div class="ba-sub">Retseptlaringizni qo'shing va barchaga ko'rsating</div>
         </div>
       </div>
 
-      <!-- ── Blogger badge (faqat BLOGGER uchun) ── -->
-      <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active-card">
-        <div class="bac-icon">✅</div>
-        <div class="bac-text">
-          <div class="bac-title">Siz Bloggersi!</div>
-          <div class="bac-sub">Endi retseptlaringizni qo'shishingiz va barchaga ko'rsatishingiz mumkin</div>
-        </div>
-      </div>
-
-      <!-- ── My recipes (faqat BLOGGER va ADMIN) ── -->
+      <!-- ── BLOGGER RETSEPTLARI ── -->
       <div v-if="auth.isBlogger" class="section">
-        <div class="section-header">
-          <h2 class="section-title">{{ lang.t('profile.my_recipes') }}</h2>
-          <button @click="openCreateRecipe" class="btn-add-recipe">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
-            </svg>
-            {{ lang.t('common.add') }}
+        <div class="section-head">
+          <h2 class="section-title">Mening retseptlarim</h2>
+          <button @click="openCreateRecipe" class="btn-add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
+            Qo'shish
           </button>
         </div>
 
         <div v-if="recipes.length" class="recipe-grid">
           <div v-for="r in recipes" :key="r.id" class="card-wrap">
             <RecipeCard :recipe="r" />
-            <div class="card-actions">
-              <button @click.prevent="openEditRecipe(r)" class="ca-btn ca-edit" title="Tahrirlash">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
+            <div class="card-overlay">
+              <button @click.prevent="openEditRecipe(r)" class="ov-btn ov-edit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
               </button>
-              <button @click.prevent="deleteRecipe(r.id)" :disabled="deletingId === r.id"
-                class="ca-btn ca-delete" title="O'chirish">
-                <span v-if="deletingId === r.id" class="ca-spin" />
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
+              <button @click.prevent="deleteRecipe(r.id)" :disabled="deletingId === r.id" class="ov-btn ov-del">
+                <span v-if="deletingId === r.id" class="spin" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
               </button>
             </div>
           </div>
         </div>
-        <div v-else class="empty-recipes">
-          <div class="er-icon">📝</div>
-          <p class="er-title">{{ lang.t('profile.no_recipes') }}</p>
-          <p class="er-sub">{{ lang.t('profile.no_recipes_sub') }}</p>
-          <button @click="openCreateRecipe" class="btn-create-recipe">
-            {{ lang.t('profile.add_recipe') }}
-          </button>
+
+        <div v-else class="empty-box">
+          <div class="empty-emoji">📝</div>
+          <div class="empty-title">Hali retsept yo'q</div>
+          <div class="empty-sub">Birinchi retseptingizni qo'shing!</div>
+          <button @click="openCreateRecipe" class="btn-empty">+ Retsept qo'shish</button>
         </div>
       </div>
 
-      <!-- ── USER uchun: Saqlangan retseptlar + Blogger taklifi ── -->
+      <!-- ── USER EMPTY STATE ── -->
       <div v-else class="section">
-        <div class="section-header">
+        <div class="section-head">
           <h2 class="section-title">💾 Saqlangan retseptlar</h2>
         </div>
-        <div class="user-upgrade-hint">
-          <div class="uuh-icon">🍳</div>
-          <div class="uuh-body">
-            <div class="uuh-title">O'z retseptingizni ulashmoqchimisiz?</div>
-            <div class="uuh-sub">Blogger bo'ling — retseptlaringizni qo'shing va barchaga ko'rsating</div>
-            <button @click="openBloggerModal" class="uuh-btn">
-              👨‍🍳 Blogger bo'lish
-            </button>
-          </div>
+        <div class="upgrade-box">
+          <div class="ub-emoji">🍳</div>
+          <div class="ub-title">O'z retseptingizni ulashmoqchimisiz?</div>
+          <div class="ub-sub">Blogger bo'ling — retseptlar qo'shing, auditoriya to'plang</div>
+          <button @click="openBloggerModal" class="btn-upgrade">👨‍🍳 Blogger bo'lish</button>
         </div>
       </div>
 
     </template>
 
-    <!-- Recipe Form Modal -->
-    <RecipeFormModal
-      :recipe="editingRecipe"
-      :visible="showRecipeModal"
-      @close="showRecipeModal = false"
-      @saved="handleRecipeSaved"
-    />
+    <!-- ══════════════ MODALS ══════════════ -->
 
-    <!-- Blogger bo'lish Modal -->
+    <!-- Recipe form -->
+    <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal"
+      @close="showRecipeModal = false" @saved="handleRecipeSaved" />
+
+    <!-- Blogger modal -->
     <Teleport to="body">
-      <Transition name="modal-fade">
+      <Transition name="mfade">
         <div v-if="showBloggerModal" class="modal-overlay" @click.self="showBloggerModal = false">
-          <div class="modal-box blogger-modal">
-            <div class="modal-header">
-              <div class="blogger-modal-icon">👨‍🍳</div>
+          <div class="modal-box">
+            <div class="modal-head">
+              <div class="mh-icon">👨‍🍳</div>
               <div>
-                <h2 class="modal-title">Blogger bo'lish</h2>
-                <p class="blogger-modal-sub">Foydalanish shartlarini o'qib, tasdiqlang</p>
+                <div class="mh-title">Blogger bo'lish</div>
+                <div class="mh-sub">Shartlarni o'qib, tasdiqlang</div>
               </div>
-              <button class="modal-close" @click="showBloggerModal = false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
+              <button class="modal-x" @click="showBloggerModal = false">✕</button>
             </div>
 
-            <!-- Blogger imkoniyatlari -->
             <div class="blogger-perks">
-              <div class="perk-item">
-                <span class="perk-icon">📝</span>
-                <span>Retsept qo'shish va tahrirlash</span>
-              </div>
-              <div class="perk-item">
-                <span class="perk-icon">🌍</span>
-                <span>Retseptlaringiz barcha foydalanuvchilarga ko'rinadi</span>
-              </div>
-              <div class="perk-item">
-                <span class="perk-icon">📊</span>
-                <span>Ko'rishlar, baholar va izohlarni kuzatish</span>
-              </div>
-              <div class="perk-item">
-                <span class="perk-icon">🏷️</span>
-                <span>Profil sahifangizda "Blogger" belgisi</span>
-              </div>
+              <div class="perk">📝 Retsept qo'shish va tahrirlash</div>
+              <div class="perk">🌍 Retseptlar barcha userlarga ko'rinadi</div>
+              <div class="perk">📊 Ko'rishlar va baholarni kuzatish</div>
+              <div class="perk">🏷️ Profilda "Blogger" belgisi</div>
             </div>
 
-            <!-- Shartlar matni -->
-            <div class="terms-box" @scroll="onTermsScroll">
-              <h4 class="terms-title">Foydalanish shartlari</h4>
-              <p>Ushbu platformaga blogger sifatida ro'yxatdan o'tar ekansiz, quyidagi shartlarga rozilik bildirasiz:</p>
+            <div class="terms-scroll" @scroll="onTermsScroll">
+              <div class="terms-title">Foydalanish shartlari</div>
               <ol class="terms-list">
-                <li>Siz tomonidan yuklangan barcha retseptlar va rasmlar sizning intellektual mulkingiz hisoblanadi va ularni ulashishga huquqingiz bor.</li>
+                <li>Yuklangan barcha kontent sizning mulkingiz — uni ulashishga huquqingiz bor.</li>
                 <li>Boshqalarning mualliflik huquqini buzuvchi kontent yuklab bo'lmaydi.</li>
-                <li>Retseptlar haqiqiy, ishonchli va sog'lom bo'lishi kerak — zararli yoki noto'g'ri ma'lumot joylashtirib bo'lmaydi.</li>
-                <li>Noo'rin, haqoratli yoki spam xarakteri tashuvchi kontent joylashtirib bo'lmaydi.</li>
-                <li>Platforma ma'muriyati qoidabuzarlik holatida hisobingizni blogger statusidan mahrum qilish huquqiga ega.</li>
-                <li>Siz platformaning maxfiylik siyosatiga va foydalanish qoidalariga to'liq rozilik bildirasiz.</li>
+                <li>Retseptlar haqiqiy va sog'lom bo'lishi kerak.</li>
+                <li>Spam, haqoratli yoki zararli kontent man etiladi.</li>
+                <li>Qoidabuzarlik holatida blogger statusidan mahrum etilasiz.</li>
+                <li>Maxfiylik siyosatimizga to'liq rozilik bildirasiz.</li>
               </ol>
-              <p class="terms-scroll-hint" v-if="!termsScrolled">↓ Davom etish uchun pastga aylantiring</p>
+              <div v-if="!termsScrolled" class="terms-hint">↓ O'qishni davom eting</div>
             </div>
 
-            <div v-if="bloggerError" class="modal-error">{{ bloggerError }}</div>
-            <div v-if="bloggerSuccess" class="modal-success">🎉 Tabriklaymiz! Siz endi Bloggersiz!</div>
+            <div v-if="bloggerError" class="msg-error">{{ bloggerError }}</div>
+            <div v-if="bloggerSuccess" class="msg-ok">🎉 Tabriklaymiz! Siz endi Bloggersiz!</div>
 
-            <div class="modal-footer">
-              <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">
-                Bekor qilish
-              </button>
-              <button
-                @click="confirmBecomeBlogger"
-                class="btn-blogger-confirm"
-                :disabled="!termsScrolled || bloggerLoading"
-              >
-                <span v-if="bloggerLoading" class="btn-spinner"></span>
-                <span>{{ bloggerLoading ? 'Saqlanmoqda...' : 'Qabul qilaman va Blogger bo\'laman' }}</span>
+            <div class="modal-foot">
+              <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">Bekor qilish</button>
+              <button @click="confirmBecomeBlogger" class="btn-confirm" :disabled="!termsScrolled || bloggerLoading">
+                <span v-if="bloggerLoading" class="spin" />
+                {{ bloggerLoading ? 'Saqlanmoqda...' : 'Qabul qilaman ✓' }}
               </button>
             </div>
           </div>
@@ -486,92 +428,63 @@ async function confirmBecomeBlogger() {
       </Transition>
     </Teleport>
 
-    <!-- Profile Edit Modal -->
+    <!-- Profile edit modal -->
     <Teleport to="body">
-      <Transition name="modal-fade">
+      <Transition name="mfade">
         <div v-if="showEdit" class="modal-overlay" @click.self="showEdit = false">
           <div class="modal-box">
-            <div class="modal-header">
-              <h2 class="modal-title">{{ lang.t('profile.edit') }}</h2>
-              <button class="modal-close" @click="showEdit = false">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
+            <div class="modal-head">
+              <div class="mh-icon">✏️</div>
+              <div class="mh-title">Profilni tahrirlash</div>
+              <button class="modal-x" @click="showEdit = false">✕</button>
             </div>
+
             <div class="modal-body">
-
               <!-- Avatar upload -->
-              <div class="avatar-upload-wrap">
-                <div class="avatar-upload" @click="avatarInput?.click()" :class="{ 'au-loading': avatarUploading }">
-                  <img v-if="avatarPreview" :src="resolveImageUrl(avatarPreview)" class="au-img" alt="avatar" />
-                  <span v-else class="au-initials">{{ auth.initials }}</span>
-                  <div class="au-overlay">
-                    <span v-if="avatarUploading" class="au-spinner" />
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M3 16v2a2 2 0 002 2h14a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12"/>
-                    </svg>
-                  </div>
+              <div class="ava-upload" @click="avatarInput?.click()" :class="{ loading: avatarUploading }">
+                <img v-if="avatarPreview" :src="resolveImageUrl(avatarPreview)" class="au-img" />
+                <span v-else class="au-letter">{{ auth.initials }}</span>
+                <div class="au-overlay">
+                  <span v-if="avatarUploading" class="spin" />
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:22px;height:22px;color:#fff"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16v2a2 2 0 002 2h14a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12"/></svg>
                 </div>
-                <div class="au-hint">
-                  <span v-if="avatarUploading">Yuklanmoqda...</span>
-                  <span v-else>{{ lang.t('profile.avatar_hint') }}</span>
-                  <span class="au-size">JPG, PNG, WEBP · max 5 MB</span>
-                </div>
-                <input ref="avatarInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif"
-                  style="display:none" @change="onAvatarFileChange" />
               </div>
+              <div class="au-hint">Rasm o'zgartirish · JPG, PNG, max 5MB</div>
+              <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange" />
 
-              <!-- Full name -->
               <div class="form-group">
-                <label class="form-label">{{ lang.t('profile.full_name') }}</label>
-                <input v-model="editForm.fullName" type="text" class="form-input"
-                  :placeholder="auth.user?.fullName || lang.t('profile.name_ph')" />
+                <label class="form-lbl">To'liq ism</label>
+                <input v-model="editForm.fullName" type="text" class="form-inp" placeholder="Ismingizni kiriting" />
               </div>
 
-              <div v-if="saveError" class="modal-error">{{ saveError }}</div>
-              <div v-if="saveSuccess" class="modal-success">{{ lang.t('profile.saved_ok') }}</div>
+              <div v-if="saveError" class="msg-error">{{ saveError }}</div>
+              <div v-if="saveSuccess" class="msg-ok">✓ Saqlandi!</div>
 
-              <!-- Password change section -->
+              <!-- Password toggle -->
               <div class="pw-section">
                 <button class="pw-toggle" @click="showPwForm = !showPwForm" type="button">
-                  {{ lang.t('profile.pw_change') }}
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" :style="{ transform: showPwForm ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                  </svg>
+                  🔑 Parolni o'zgartirish
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" :style="`width:16px;height:16px;transition:.2s;transform:rotate(${showPwForm?180:0}deg)`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
-                <div v-if="showPwForm" class="pw-form">
-                  <div class="form-group">
-                    <label class="form-label">{{ lang.t('profile.pw_current') }}</label>
-                    <input v-model="pwForm.currentPassword" type="password" class="form-input" placeholder="••••••" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">{{ lang.t('profile.pw_new') }}</label>
-                    <input v-model="pwForm.newPassword" type="password" class="form-input" placeholder="••••••" />
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">{{ lang.t('profile.pw_confirm') }}</label>
-                    <input v-model="pwForm.confirmPassword" type="password" class="form-input" placeholder="••••••" />
-                  </div>
-                  <div v-if="pwError" class="modal-error">{{ pwError }}</div>
-                  <div v-if="pwSuccess" class="modal-success">{{ lang.t('profile.pw_saved') }}</div>
-                  <button @click="savePassword" class="btn-save-pw" :disabled="pwSaving" type="button">
-                    <span v-if="pwSaving" class="btn-spinner"></span>
-                    <span>{{ pwSaving ? lang.t('profile.pw_saving') : lang.t('profile.pw_save') }}</span>
+                <div v-if="showPwForm" class="pw-fields">
+                  <input v-model="pwForm.currentPassword" type="password" class="form-inp" placeholder="Joriy parol" />
+                  <input v-model="pwForm.newPassword"     type="password" class="form-inp" placeholder="Yangi parol" />
+                  <input v-model="pwForm.confirmPassword" type="password" class="form-inp" placeholder="Yangi parolni tasdiqlang" />
+                  <div v-if="pwError"   class="msg-error">{{ pwError }}</div>
+                  <div v-if="pwSuccess" class="msg-ok">✓ Parol yangilandi!</div>
+                  <button @click="savePassword" :disabled="pwSaving" class="btn-pw-save">
+                    <span v-if="pwSaving" class="spin" /> Parolni saqlash
                   </button>
                 </div>
               </div>
             </div>
-              <div class="modal-footer">
-                <button @click="showEdit = false" class="btn-ghost" :disabled="saving">
-                  {{ lang.t('common.cancel') }}
-                </button>
-                <button @click="saveProfile" class="btn-save" :disabled="saving">
-                  <span v-if="saving" class="btn-spinner"></span>
-                  <span>{{ saving ? lang.t('common.saving') : lang.t('common.save') }}</span>
-                </button>
-              </div>
+
+            <div class="modal-foot">
+              <button @click="showEdit = false" class="btn-ghost" :disabled="saving">Bekor qilish</button>
+              <button @click="saveProfile" class="btn-save" :disabled="saving">
+                <span v-if="saving" class="spin" />{{ saving ? 'Saqlanmoqda...' : 'Saqlash' }}
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -581,698 +494,413 @@ async function confirmBecomeBlogger() {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 20px; max-width: 720px; margin: 0 auto; }
+.page { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin: 0 auto; padding-bottom: 40px; }
 
-/* ── Profile card ── */
-.profile-card {
+/* ── SKELETON ── */
+.skel-page  { display: flex; flex-direction: column; gap: 14px; }
+.skel-hero  { height: 150px; border-radius: 24px; background: var(--bd-md); animation: pulse 1.5s ease-in-out infinite; }
+.skel-info  { display: flex; align-items: center; gap: 16px; padding: 0 4px; }
+.skel-ava   { width: 72px; height: 72px; border-radius: 18px; background: var(--bd-md); animation: pulse 1.5s ease-in-out infinite; flex-shrink: 0; }
+.skel-lines { display: flex; flex-direction: column; gap: 8px; }
+.skel-line  { height: 14px; border-radius: 6px; background: var(--bd); animation: pulse 1.5s ease-in-out infinite; }
+.w180 { width: 180px; } .w120 { width: 120px; }
+.skel-grid  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.skel-stat  { height: 70px;  border-radius: 14px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
+.skel-card  { height: 180px; border-radius: 18px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+/* ── HERO CARD ── */
+.hero-card {
   background: var(--bg-card);
   border: 1px solid var(--bd);
   border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-}
-
-.cover {
+  /* overflow: hidden — olib tashlandi, avatar to'liq ko'rinsin */
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   position: relative;
-  height: 120px;
-  background: linear-gradient(135deg, #0a2a16 0%, #0f2d1f 50%, #112032 100%);
-  overflow: hidden;
 }
-.cover-blob {
-  position: absolute;
-  width: 280px;
-  height: 280px;
-  border-radius: 50%;
-  background: rgba(216, 90, 48, 0.2);
-  filter: blur(60px);
-  top: -80px;
-  right: -40px;
-}
-
-.profile-body { padding: 0 28px 28px; }
-
-.avatar-wrap {
+.hero-cover {
   position: relative;
-  width: 84px;
-  margin-top: -42px;
-  margin-bottom: 16px;
-}
-.avatar {
-  width: 84px;
-  height: 84px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  border: 4px solid var(--bg-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 900;
-  color: #fff;
+  height: 110px;
+  background: linear-gradient(135deg, #0d1f14 0%, #1a3020 35%, #162030 70%, #0b1520 100%);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  border-radius: 24px 24px 0 0; /* faqat yuqori burchaklar */
 }
-.avatar img { width: 100%; height: 100%; object-fit: cover; }
-.avatar-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 3px solid var(--bg-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+.cover-pattern {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px),
+    linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.3) 100%);
+  background-size: 22px 22px, 100% 100%;
 }
-.badge-admin   { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.badge-blogger { background: linear-gradient(135deg, #D85A30, #E8713E); }
-.badge-user    { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.cover-glow {
+  position: absolute; border-radius: 50%; filter: blur(55px);
+}
+.g1 { width: 220px; height: 220px; background: rgba(216,90,48,0.35); top: -80px; right: -40px; }
+.g2 { width: 180px; height: 180px; background: rgba(59,130,246,0.2);  bottom: -70px; left: -30px; }
 
-.profile-name { font-size: 22px; font-weight: 900; color: var(--tx-1); }
-.profile-role { font-size: 13px; color: #E8713E; font-weight: 700; margin-top: 3px; }
+.hero-body { padding: 0 24px 24px; }
 
-/* Stats */
-.stats-row {
-  display: flex;
-  gap: 0;
-  margin-top: 20px;
-  border-top: 1px solid var(--bd);
-  border-bottom: 1px solid var(--bd);
+/* Avatar */
+.ava-zone {
+  display: flex; align-items: flex-end; gap: 16px;
+  margin-top: -48px; /* avatarning yarmi yuqorida, yarmi pastda */
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 10; /* cover ustida ko'rinsin */
 }
-.stat-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 16px 8px;
-  border-right: 1px solid var(--bd);
-}
-.stat-item:last-child { border-right: none; }
-.stat-icon { font-size: 20px; }
-.stat-val  { font-size: 18px; font-weight: 900; color: var(--tx-1); }
-.stat-lbl  { font-size: 10px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; }
-
-/* Actions */
-.profile-actions { display: flex; gap: 10px; margin-top: 20px; }
-.btn-edit {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 14px;
-  color: var(--tx-3);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-edit:hover { background: var(--bd-md); color: var(--tx-1); }
-.btn-edit svg { width: 16px; height: 16px; }
-
-.btn-logout {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px 18px;
-  background: rgba(239,68,68,0.08);
-  border: 1px solid rgba(239,68,68,0.18);
-  border-radius: 14px;
-  color: #f87171;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-logout:hover { background: rgba(239,68,68,0.16); }
-.btn-logout svg { width: 16px; height: 16px; }
-
-/* ── Info card ── */
-.info-card {
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
-}
-.info-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--bd);
-}
-.info-row:last-child { border-bottom: none; }
-.ir-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--bg-input);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
+.ava-ring {
+  width: 96px; height: 96px; border-radius: 24px;
+  padding: 3px;
+  border: 4px solid var(--bg-card);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
   flex-shrink: 0;
 }
-.ir-body   { flex: 1; }
-.ir-label  { font-size: 11px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
-.ir-val    { font-size: 14px; font-weight: 700; color: var(--tx-2); }
+.ava-ring.role-admin   { background: linear-gradient(135deg, #fbbf24, #d97706); }
+.ava-ring.role-blogger { background: linear-gradient(135deg, #D85A30, #f97316); }
+.ava-ring.role-user    { background: linear-gradient(135deg, #3b82f6, #6366f1); }
 
-.role-badge {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 800;
+.ava-inner {
+  width: 100%; height: 100%; border-radius: 19px;
+  background: linear-gradient(135deg, #1a2a1a, #0f1e2a);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 900; color: #fff;
 }
-.role-badge.badge-admin   { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.role-badge.badge-blogger { background: rgba(216,90,48,0.15);  color: #E8713E; }
-.role-badge.badge-user    { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+.ava-inner img { width: 100%; height: 100%; object-fit: cover; }
 
-/* ── Recipes section ── */
+.role-pill {
+  padding: 5px 13px; border-radius: 20px;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.role-pill.role-admin   { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.role-pill.role-blogger { background: rgba(216,90,48,0.15);  color: #E8713E; border: 1px solid rgba(216,90,48,0.3); }
+.role-pill.role-user    { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.25); }
+
+/* Name */
+.hero-name { font-size: 23px; font-weight: 900; color: var(--tx-1); margin: 0 0 6px; }
+.hero-sub-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.meta-chip {
+  padding: 4px 11px; border-radius: 8px;
+  background: var(--bg-input); border: 1px solid var(--bd);
+  font-size: 12px; font-weight: 600; color: var(--tx-5);
+}
+
+/* Stats */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-bottom: 20px;
+}
+.stat-box {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 16px 8px;
+  background: var(--bg-input); border: 1px solid var(--bd);
+  border-radius: 16px;
+  transition: all 0.2s;
+  cursor: default;
+}
+.stat-box:hover {
+  border-color: rgba(216,90,48,0.4);
+  background: rgba(216,90,48,0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(216,90,48,0.1);
+}
+.stat-num { font-size: 24px; font-weight: 900; color: var(--tx-1); line-height: 1; }
+.stat-lbl { font-size: 9px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 2px; }
+
+/* Actions */
+.hero-actions { display: flex; gap: 10px; }
+.btn-action {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 16px; border-radius: 14px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-action svg { width: 16px; height: 16px; }
+.btn-primary {
+  background: var(--bg-input); border: 1px solid var(--bd-md); color: var(--tx-3);
+}
+.btn-primary:hover { background: var(--bd-md); color: var(--tx-1); }
+.btn-danger {
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171;
+  flex: 0 0 auto; padding: 11px 18px;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.15); }
+
+/* ── INFO CARD ── */
+.info-card {
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 20px; overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+}
+.info-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 20px; border-bottom: 1px solid var(--bd);
+}
+.info-row:last-child { border-bottom: none; }
+.info-icon {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: var(--bg-input); display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.info-lbl { font-size: 10px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+.info-val { font-size: 14px; font-weight: 600; color: var(--tx-2); }
+
+.role-badge { padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 800; }
+.role-badge.role-admin   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.role-badge.role-blogger { background: rgba(216,90,48,0.15);  color: #E8713E; }
+.role-badge.role-user    { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+/* ── BLOGGER CTA ── */
+.blogger-cta {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; gap: 14px;
+  background: linear-gradient(135deg, rgba(216,90,48,0.1), rgba(232,113,62,0.05));
+  border: 1px solid rgba(216,90,48,0.25); border-radius: 20px;
+  cursor: pointer; transition: all 0.2s;
+}
+.blogger-cta:hover { background: linear-gradient(135deg,rgba(216,90,48,0.18),rgba(232,113,62,0.1)); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(216,90,48,0.15); }
+.bcta-left  { display: flex; align-items: center; gap: 14px; }
+.bcta-emoji { font-size: 36px; }
+.bcta-title { font-size: 15px; font-weight: 900; color: #E8713E; }
+.bcta-sub   { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
+.bcta-arrow { font-size: 24px; color: #E8713E; font-weight: 700; }
+
+/* ── BLOGGER ACTIVE ── */
+.blogger-active {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(22,163,74,0.04));
+  border: 1px solid rgba(34,197,94,0.2); border-radius: 20px;
+}
+.ba-icon  { font-size: 28px; flex-shrink: 0; }
+.ba-title { font-size: 14px; font-weight: 800; color: #4ade80; }
+.ba-sub   { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+
+/* ── SECTION ── */
 .section { display: flex; flex-direction: column; gap: 14px; }
-.section-header { display: flex; align-items: center; justify-content: space-between; }
-.section-title  { font-size: 17px; font-weight: 900; color: var(--tx-1); }
-.section-link   { font-size: 13px; font-weight: 700; color: #E8713E; text-decoration: none; }
-.section-link:hover { color: #F0997B; }
+.section-head { display: flex; align-items: center; justify-content: space-between; }
+.section-title { font-size: 17px; font-weight: 900; color: var(--tx-1); }
 
+.btn-add {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(216,90,48,0.12); border: 1px solid rgba(216,90,48,0.25); border-radius: 10px;
+  color: #E8713E; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.btn-add svg { width: 14px; height: 14px; }
+.btn-add:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
+
+/* Recipe grid */
 .recipe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 640px) { .recipe-grid { grid-template-columns: repeat(2, 1fr); } }
 
-/* Add recipe button in header */
-.btn-add-recipe {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: rgba(216,90,48,0.12);
-  border: 1px solid rgba(216,90,48,0.25);
-  border-radius: 10px;
-  color: #E8713E;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+.card-wrap    { position: relative; }
+.card-overlay {
+  position: absolute; top: 8px; left: 8px;
+  display: flex; gap: 5px;
+  opacity: 0; transition: opacity 0.2s; z-index: 2;
 }
-.btn-add-recipe:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
-.btn-add-recipe svg { width: 14px; height: 14px; }
-
-/* Card wrapper with action overlay */
-.card-wrap {
-  position: relative;
-}
-.card-actions {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  display: flex;
-  gap: 5px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 2;
-}
-.card-wrap:hover .card-actions { opacity: 1; }
-
-.ca-btn {
-  width: 30px; height: 30px;
-  border-radius: 8px;
-  border: none;
+.card-wrap:hover .card-overlay { opacity: 1; }
+.ov-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: none;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: transform 0.2s, background 0.2s;
+  cursor: pointer; backdrop-filter: blur(8px); transition: all 0.15s;
 }
-.ca-btn svg { width: 14px; height: 14px; }
-.ca-btn:hover { transform: scale(1.1); }
-.ca-edit  { background: rgba(216,90,48,0.85); color: #fff; }
-.ca-edit:hover { background: rgba(216,90,48,1); }
-.ca-delete { background: rgba(239,68,68,0.85); color: #fff; }
-.ca-delete:hover { background: rgba(239,68,68,1); }
-.ca-delete:disabled { opacity: 0.5; cursor: not-allowed; }
-.ca-spin {
-  width: 12px; height: 12px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+.ov-btn svg { width: 14px; height: 14px; }
+.ov-edit { background: rgba(216,90,48,0.85); color: #fff; }
+.ov-edit:hover { background: rgba(216,90,48,1); }
+.ov-del  { background: rgba(239,68,68,0.85); color: #fff; }
+.ov-del:hover  { background: rgba(239,68,68,1); }
+.ov-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.empty-recipes {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+/* Empty state */
+.empty-box {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 56px 24px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 20px;
+  background: var(--bg-card); border: 1px solid var(--bd); border-radius: 20px;
+  text-align: center;
 }
-.er-icon  { font-size: 44px; margin-bottom: 4px; }
-.er-title { font-size: 15px; font-weight: 800; color: var(--tx-4); }
-.er-sub   { font-size: 12px; color: var(--tx-6); }
-.btn-create-recipe {
-  margin-top: 6px;
-  padding: 10px 20px;
-  background: rgba(216,90,48,0.12);
-  border: 1px solid rgba(216,90,48,0.25);
-  border-radius: 12px;
-  color: #E8713E;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+.empty-emoji { font-size: 44px; }
+.empty-title { font-size: 15px; font-weight: 800; color: var(--tx-4); }
+.empty-sub   { font-size: 12px; color: var(--tx-6); }
+.btn-empty {
+  margin-top: 4px; padding: 10px 20px;
+  background: rgba(216,90,48,0.12); border: 1px solid rgba(216,90,48,0.25); border-radius: 12px;
+  color: #E8713E; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
 }
-.btn-create-recipe:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
+.btn-empty:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
 
-/* ── Skeleton ── */
-.skeleton-wrap { display: flex; flex-direction: column; gap: 16px; }
-.skel-cover   { height: 120px; border-radius: 24px 24px 0 0; background: var(--bd-md); animation: pulse 1.5s ease-in-out infinite; }
-.skel-body    { padding: 0 28px; display: flex; flex-direction: column; gap: 8px; }
-.skel-avatar  { width: 84px; height: 84px; border-radius: 20px; background: var(--bd-md); margin-top: -42px; animation: pulse 1.5s ease-in-out infinite; }
-.skel-name    { height: 24px; width: 200px; border-radius: 8px; background: var(--bd); animation: pulse 1.5s ease-in-out infinite; }
-.skel-sub     { height: 16px; width: 120px; border-radius: 6px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
-.skel-grid    { }
-.skel-recipe  { height: 200px; border-radius: 20px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
+/* Upgrade box */
+.upgrade-box {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 40px 24px;
+  background: var(--bg-card); border: 1px dashed rgba(216,90,48,0.3); border-radius: 20px;
+  text-align: center;
+}
+.ub-emoji { font-size: 44px; }
+.ub-title { font-size: 15px; font-weight: 800; color: var(--tx-2); }
+.ub-sub   { font-size: 12px; color: var(--tx-5); }
+.btn-upgrade {
+  margin-top: 6px; padding: 10px 22px;
+  background: linear-gradient(135deg, #D85A30, #E8713E); border: none; border-radius: 12px;
+  color: #fff; font-size: 13px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(216,90,48,0.3); transition: all 0.2s;
+}
+.btn-upgrade:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(216,90,48,0.4); }
 
-/* ── Avatar Upload ── */
-.avatar-upload-wrap {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 16px;
-}
-.avatar-upload {
-  position: relative;
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  cursor: pointer;
-  flex-shrink: 0;
-  overflow: hidden;
-  border: 3px solid rgba(255,255,255,0.1);
-  transition: border-color 0.2s;
-}
-.avatar-upload:hover { border-color: rgba(216,90,48,0.5); }
-.au-img      { width: 100%; height: 100%; object-fit: cover; display: block; }
-.au-initials {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  font-weight: 900;
-  color: #fff;
-}
-.au-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.au-overlay svg { width: 22px; height: 22px; color: #fff; }
-.avatar-upload:hover .au-overlay,
-.au-loading .au-overlay { opacity: 1; }
-
-.au-spinner {
-  width: 20px; height: 20px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-}
-
-.au-hint {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-3);
-}
-.au-size { font-size: 11px; color: var(--tx-5); font-weight: 500; }
-
-/* ── Modal ── */
+/* ── MODALS ── */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(6px);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+  z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .modal-box {
-  background: var(--bg-surface);
-  border: 1px solid var(--bd-md);
-  border-radius: 24px;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 40px 80px rgba(0,0,0,0.4);
-  overflow: hidden;
+  background: var(--bg-surface); border: 1px solid var(--bd-md);
+  border-radius: 24px; width: 100%; max-width: 440px;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.5); overflow: hidden;
 }
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.modal-head {
+  display: flex; align-items: center; gap: 12px;
   padding: 20px 24px 0;
 }
-.modal-title { font-size: 17px; font-weight: 900; color: var(--tx-1); }
-.modal-close {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: var(--bg-input);
-  color: var(--tx-4);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.mh-icon  { font-size: 28px; flex-shrink: 0; }
+.mh-title { font-size: 17px; font-weight: 900; color: var(--tx-1); }
+.mh-sub   { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+.modal-x  {
+  margin-left: auto; width: 32px; height: 32px;
+  border: none; background: var(--bg-input); border-radius: 8px;
+  color: var(--tx-4); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
-.modal-close:hover { background: var(--bd-md); color: var(--tx-1); }
-.modal-close svg { width: 16px; height: 16px; }
+.modal-x:hover { background: var(--bd-md); color: var(--tx-1); }
 
-.modal-body {
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.modal-footer {
-  display: flex;
-  gap: 10px;
-  padding: 0 24px 24px;
-}
-.modal-footer > * { flex: 1; justify-content: center; }
+.modal-body { padding: 16px 24px; display: flex; flex-direction: column; gap: 14px; }
 
+.modal-foot {
+  display: flex; gap: 10px; padding: 0 24px 24px;
+}
+.modal-foot > * { flex: 1; }
+
+/* Blogger perks */
+.blogger-perks { display: flex; flex-direction: column; gap: 6px; padding: 16px 24px 0; }
+.perk {
+  padding: 9px 12px;
+  background: var(--bg-input); border-radius: 10px;
+  font-size: 13px; font-weight: 600; color: var(--tx-2);
+}
+
+/* Terms */
+.terms-scroll {
+  margin: 12px 24px 0;
+  max-height: 160px; overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--bg-input); border: 1px solid var(--bd-md); border-radius: 12px;
+  font-size: 12px; color: var(--tx-4); line-height: 1.7;
+}
+.terms-title { font-size: 13px; font-weight: 800; color: var(--tx-2); margin-bottom: 8px; }
+.terms-list  { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.terms-hint  { text-align: center; color: var(--tx-6); font-size: 11px; margin-top: 10px; animation: pulse 1.5s ease-in-out infinite; }
+
+/* Avatar upload */
+.ava-upload {
+  position: relative; width: 80px; height: 80px; margin: 0 auto;
+  border-radius: 20px; overflow: hidden; cursor: pointer;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: 3px solid var(--bd-md);
+}
+.au-img    { width: 100%; height: 100%; object-fit: cover; }
+.au-letter {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 900; color: #fff;
+}
+.au-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.2s;
+}
+.ava-upload:hover .au-overlay,
+.ava-upload.loading .au-overlay { opacity: 1; }
+.au-hint { text-align: center; font-size: 11px; color: var(--tx-5); margin-top: 6px; }
+
+/* Form inputs */
 .form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 11px; font-weight: 800; color: var(--tx-4); text-transform: uppercase; letter-spacing: 0.08em; }
-.form-input {
-  width: 100%;
-  padding: 11px 14px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 12px;
-  color: var(--tx-2);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-  box-sizing: border-box;
+.form-lbl   { font-size: 11px; font-weight: 800; color: var(--tx-4); text-transform: uppercase; letter-spacing: 0.07em; }
+.form-inp   {
+  padding: 10px 14px; background: var(--bg-input);
+  border: 1px solid var(--bd-md); border-radius: 12px;
+  color: var(--tx-2); font-size: 14px; outline: none; transition: border-color 0.2s;
+  width: 100%; box-sizing: border-box;
 }
-.form-input:focus { border-color: rgba(216,90,48,0.5); }
+.form-inp:focus { border-color: rgba(216,90,48,0.5); }
 
 /* Password section */
-.pw-section {
-  border: 1px solid var(--bd-md);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.pw-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px 14px;
-  background: var(--bg-input);
-  border: none;
-  color: var(--tx-3);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  text-align: left;
+.pw-section { border: 1px solid var(--bd-md); border-radius: 12px; overflow: hidden; }
+.pw-toggle  {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px; background: var(--bg-input); border: none;
+  color: var(--tx-3); font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: background 0.2s;
 }
 .pw-toggle:hover { background: var(--bd-md); color: var(--tx-1); }
-.pw-toggle svg { width: 16px; height: 16px; flex-shrink: 0; }
-.pw-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  border-top: 1px solid var(--bd);
+.pw-fields  { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-top: 1px solid var(--bd); }
+.btn-pw-save {
+  align-self: flex-start; display: flex; align-items: center; gap: 6px;
+  padding: 9px 16px;
+  background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.25); border-radius: 10px;
+  color: #60a5fa; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
 }
-.btn-save-pw {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 16px;
-  background: rgba(59,130,246,0.15);
-  border: 1px solid rgba(59,130,246,0.3);
-  border-radius: 12px;
-  color: #60a5fa;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
-  align-self: flex-start;
-}
-.btn-save-pw:hover:not(:disabled) { background: rgba(59,130,246,0.25); }
-.btn-save-pw:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-pw-save:hover { background: rgba(59,130,246,0.2); }
+.btn-pw-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.modal-error {
-  font-size: 12px;
-  font-weight: 700;
-  color: #f87171;
-  background: rgba(239,68,68,0.08);
-  border: 1px solid rgba(239,68,68,0.2);
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-
-.modal-success {
-  font-size: 13px;
-  font-weight: 700;
-  color: #4ade80;
-  background: rgba(22,163,74,0.08);
-  border: 1px solid rgba(22,163,74,0.2);
-  border-radius: 10px;
-  padding: 10px 12px;
-  text-align: center;
-}
-
-.btn-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 4px;
-}
-
+/* Buttons */
 .btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 11px 18px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-xl);
-  border-radius: 12px;
-  color: var(--tx-3);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  padding: 11px; background: var(--bg-input); border: 1px solid var(--bd-md);
+  border-radius: 12px; color: var(--tx-3); font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background 0.2s;
 }
-.btn-ghost:hover { background: var(--bd); }
+.btn-ghost:hover { background: var(--bd-md); }
+.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-save {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 11px 18px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  border: none;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(216,90,48,0.3);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-.btn-save:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(216,90,48,0.4); }
-
-/* ── USER upgrade hint (retsept section da) ── */
-.user-upgrade-hint {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 24px 20px;
-  background: var(--bg-card);
-  border: 1px dashed rgba(216,90,48,0.3);
-  border-radius: 20px;
-}
-.uuh-icon  { font-size: 40px; flex-shrink: 0; }
-.uuh-body  { display: flex; flex-direction: column; gap: 6px; }
-.uuh-title { font-size: 14px; font-weight: 800; color: var(--tx-2); }
-.uuh-sub   { font-size: 12px; color: var(--tx-5); line-height: 1.4; }
-.uuh-btn {
-  margin-top: 4px;
-  align-self: flex-start;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  border: none;
-  border-radius: 10px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 3px 10px rgba(216,90,48,0.3);
-}
-.uuh-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(216,90,48,0.4); }
-
-/* ── Blogger banner ── */
-.blogger-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  background: linear-gradient(135deg, rgba(216,90,48,0.12), rgba(232,113,62,0.06));
-  border: 1px solid rgba(216,90,48,0.3);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  gap: 14px;
-}
-.blogger-banner:hover {
-  background: linear-gradient(135deg, rgba(216,90,48,0.2), rgba(232,113,62,0.12));
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(216,90,48,0.15);
-}
-.bb-left { display: flex; align-items: center; gap: 14px; flex: 1; }
-.bb-icon { font-size: 36px; flex-shrink: 0; }
-.bb-text  { display: flex; flex-direction: column; gap: 3px; }
-.bb-title { font-size: 15px; font-weight: 900; color: #E8713E; }
-.bb-sub   { font-size: 12px; color: var(--tx-5); line-height: 1.4; }
-.bb-arrow svg { width: 20px; height: 20px; color: #E8713E; flex-shrink: 0; }
-
-/* ── Blogger active card ── */
-.blogger-active-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
-  background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(22,163,74,0.05));
-  border: 1px solid rgba(34,197,94,0.25);
-  border-radius: 20px;
-}
-.bac-icon  { font-size: 32px; flex-shrink: 0; }
-.bac-title { font-size: 15px; font-weight: 900; color: #4ade80; }
-.bac-sub   { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
-
-/* ── Blogger Modal ── */
-.blogger-modal { max-width: 480px; }
-.blogger-modal .modal-header { align-items: flex-start; gap: 12px; }
-.blogger-modal-icon { font-size: 32px; flex-shrink: 0; }
-.blogger-modal-sub  { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
-
-.blogger-perks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 24px;
-  margin-bottom: 4px;
-}
-.perk-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--bg-input);
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-2);
-}
-.perk-icon { font-size: 18px; flex-shrink: 0; }
-
-.terms-box {
-  margin: 0 24px;
-  max-height: 180px;
-  overflow-y: auto;
-  padding: 14px 16px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 12px;
-  font-size: 12px;
-  color: var(--tx-4);
-  line-height: 1.6;
-  scroll-behavior: smooth;
-}
-.terms-title { font-size: 13px; font-weight: 800; color: var(--tx-2); margin: 0 0 8px; }
-.terms-list  { padding-left: 16px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
-.terms-scroll-hint {
-  text-align: center;
-  color: var(--tx-5);
-  font-size: 11px;
-  margin-top: 8px;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.btn-blogger-confirm {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 11px 16px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  border: none;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(216,90,48,0.3);
+.btn-save, .btn-confirm {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 11px;
+  background: linear-gradient(135deg, #D85A30, #E8713E); border: none;
+  border-radius: 12px; color: #fff; font-size: 13px; font-weight: 800;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(216,90,48,0.3);
   transition: all 0.2s;
 }
-.btn-blogger-confirm:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(216,90,48,0.4);
+.btn-save:hover:not(:disabled),
+.btn-confirm:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(216,90,48,0.4); }
+.btn-save:disabled,
+.btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Messages */
+.msg-error {
+  padding: 10px 14px; border-radius: 10px; margin: 0 24px;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+  color: #f87171; font-size: 12px; font-weight: 700;
 }
-.btn-blogger-confirm:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+.msg-ok {
+  padding: 10px 14px; border-radius: 10px; margin: 0 24px;
+  background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2);
+  color: #4ade80; font-size: 13px; font-weight: 700; text-align: center;
 }
+
+/* Spinner */
+.spin {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+  border-radius: 50%; animation: rot 0.7s linear infinite;
+}
+@keyframes rot { to { transform: rotate(360deg); } }
 
 /* Modal transition */
-.modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
-.modal-fade-leave-active { transition: all 0.15s ease; }
-.modal-fade-enter-from  { opacity: 0; transform: scale(0.95) translateY(10px); }
-.modal-fade-leave-to    { opacity: 0; transform: scale(0.97); }
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1; }
-}
+.mfade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+.mfade-leave-active { transition: all 0.15s ease; }
+.mfade-enter-from  { opacity: 0; transform: scale(0.95) translateY(10px); }
+.mfade-leave-to    { opacity: 0; transform: scale(0.97); }
 </style>

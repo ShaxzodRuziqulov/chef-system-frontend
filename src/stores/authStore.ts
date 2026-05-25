@@ -233,9 +233,12 @@ export const useAuthStore = defineStore('auth', () => {
       // Uni AuthUserResponse formatiga moslashtirish
       const userPayload: AuthUserResponse = {
         id:         payload.user.id,
+        username:   payload.user.username,
+        email:      payload.user.email,
         fullName:   payload.user.fullName,
         roles:      payload.user.role,
         avatar_url: payload.user.avatarUrl,
+        createdAt:  payload.user.createdAt ?? null,
       }
 
       _persistTokens(payload.accessToken, payload.refreshToken)

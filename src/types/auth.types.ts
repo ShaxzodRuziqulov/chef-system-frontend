@@ -2,7 +2,7 @@
 // Auth — backend DTOlari bilan to'liq mos
 // ─────────────────────────────────────────────────────────────────
 
-export type Role = 'USER' | 'ADMIN'
+export type Role = 'USER' | 'BLOGGER' | 'ADMIN'
 
 // POST /api/auth/register → ApiResponse<AuthResponse>
 export interface RegisterRequest {
@@ -43,10 +43,13 @@ export interface TokenPairResponse {
 
 // GET /api/auth/me → ApiResponse<AuthUserResponse>
 export interface AuthUserResponse {
-  id:         string      // UUID
+  id:         string
+  username:   string
+  email:      string
   fullName:   string
   roles:      Role
   avatar_url: string | null
+  createdAt:  string | null
 }
 
 // GET /api/users/{id} → ApiResponse<UserDto>
