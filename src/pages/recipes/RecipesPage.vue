@@ -19,17 +19,20 @@ const totalElements = ref(0)
 
 const filters = ref({
   keyword:    route.query.keyword    || '',
-  category:   route.query.category   || '',
+  category:   route.query.category   ? Number(route.query.category) : null,
   difficulty: route.query.difficulty || '',
   page:       Number(route.query.page) || 0,
 })
 
 const difficulties = computed(() => [
-  { value: '',       label: lang.t('recipes.all_levels')            },
-  { value: 'EASY',   label: '🟢 ' + lang.t('common.easy')          },
-  { value: 'MEDIUM', label: '🟡 ' + lang.t('common.medium')        },
-  { value: 'HARD',   label: '🔴 ' + lang.t('common.hard')          },
+  { value: 'EASY',   label: lang.t('common.easy'),   icon: '🟢', cls: 'chip-easy'   },
+  { value: 'MEDIUM', label: lang.t('common.medium'),  icon: '🟡', cls: 'chip-medium' },
+  { value: 'HARD',   label: lang.t('common.hard'),    icon: '🔴', cls: 'chip-hard'   },
 ])
+
+const hasActiveFilters = computed(
+  () => !!filters.value.keyword || !!filters.value.category || !!filters.value.difficulty
+)
 
 async function fetchRecipes() {
   loading.value = true
@@ -64,6 +67,19 @@ function applyFilter() {
   fetchRecipes()
 }
 
+function setCategory(id) {
+  filters.value.category   = filters.value.category === id ? null : id
+  filters.value.difficulty = ''
+  filters.value.keyword    = ''
+  applyFilter()
+}
+
+function setDifficulty(val) {
+  filters.value.difficulty = filters.value.difficulty === val ? '' : val
+  filters.value.category   = null
+  applyFilter()
+}
+
 function setPage(p) {
   filters.value.page = p
   fetchRecipes()
@@ -71,11 +87,10 @@ function setPage(p) {
 }
 
 function resetFilters() {
-  filters.value = { keyword: '', category: '', difficulty: '', page: 0 }
+  filters.value = { keyword: '', category: null, difficulty: '', page: 0 }
   fetchRecipes()
 }
 
-// Sync visible pages (max 7 around current)
 function pageRange() {
   const total = totalPages.value
   const cur   = filters.value.page
@@ -87,13 +102,20 @@ function pageRange() {
 onMounted(async () => {
   const [, c] = await Promise.all([fetchRecipes(), categoriesApi.getAll()])
   categories.value = c.data?.data ?? c.data ?? []
+
+  // Apply URL category filter after categories load
+  if (route.query.category) {
+    filters.value.category = Number(route.query.category)
+    fetchRecipes()
+  }
 })
 
-// Watch URL query changes (from topbar search)
 watch(() => route.query.keyword, (kw) => {
   if (kw !== undefined) {
-    filters.value.keyword = kw
-    filters.value.page = 0
+    filters.value.keyword    = kw
+    filters.value.category   = null
+    filters.value.difficulty = ''
+    filters.value.page       = 0
     fetchRecipes()
   }
 })
@@ -112,47 +134,72 @@ watch(() => route.query.keyword, (kw) => {
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="filters-bar">
-      <!-- Search -->
-      <div class="search-wrap">
-        <svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+    <!-- Search bar -->
+    <div class="search-wrap">
+      <svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+      </svg>
+      <input
+        v-model="filters.keyword"
+        @input="applyFilter"
+        type="text"
+        :placeholder="lang.t('recipes.search')"
+        class="search-input"
+      />
+      <button v-if="filters.keyword" @click="filters.keyword = ''; applyFilter()" class="clear-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
         </svg>
-        <input
-          v-model="filters.keyword"
-          @input="applyFilter"
-          type="text"
-          :placeholder="lang.t('recipes.search')"
-          class="search-input"
-        />
-        <button v-if="filters.keyword" @click="filters.keyword = ''; applyFilter()" class="clear-btn">✕</button>
+      </button>
+    </div>
+
+    <!-- Filter chips block -->
+    <div class="filters-block">
+
+      <!-- Difficulty chips -->
+      <div class="filter-group">
+        <span class="filter-group-label">{{ lang.t('recipes.all_levels') }}</span>
+        <div class="chips-row">
+          <button
+            v-for="d in difficulties"
+            :key="d.value"
+            @click="setDifficulty(d.value)"
+            class="chip"
+            :class="[d.cls, { 'chip-active': filters.difficulty === d.value }]"
+          >
+            <span class="chip-dot"></span>
+            {{ d.label }}
+          </button>
+        </div>
       </div>
 
-      <!-- Category -->
-      <select v-model="filters.category" @change="applyFilter" class="filter-select">
-        <option value="">{{ lang.t('recipes.all_categories') }}</option>
-        <option v-for="c in categories" :key="c.id" :value="c.id">{{ lang.catName(c) }}</option>
-      </select>
-
-      <!-- Difficulty -->
-      <select v-model="filters.difficulty" @change="applyFilter" class="filter-select">
-        <option v-for="d in difficulties" :key="d.value" :value="d.value">{{ d.label }}</option>
-      </select>
+      <!-- Category chips -->
+      <div class="filter-group">
+        <span class="filter-group-label">{{ lang.t('recipes.all_categories') }}</span>
+        <div class="chips-row chips-scroll">
+          <button
+            v-for="c in categories"
+            :key="c.id"
+            @click="setCategory(c.id)"
+            class="chip chip-cat"
+            :class="{ 'chip-active chip-cat-active': filters.category === c.id }"
+          >
+            {{ lang.catName(c) }}
+          </button>
+        </div>
+      </div>
 
       <!-- Reset -->
-      <button
-        v-if="filters.keyword || filters.category || filters.difficulty"
-        @click="resetFilters"
-        class="reset-btn"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 4l16 16M4 20L20 4"/>
-        </svg>
-        Tozalash
-      </button>
+      <div v-if="hasActiveFilters" class="filter-reset-row">
+        <button @click="resetFilters" class="reset-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+          {{ lang.t('recipes.reset') }}
+        </button>
+      </div>
     </div>
 
     <!-- Skeleton -->
@@ -191,9 +238,7 @@ watch(() => route.query.keyword, (kw) => {
         @click="setPage(p)"
         class="page-btn"
         :class="{ 'page-active': filters.page === p }"
-      >
-        {{ p + 1 }}
-      </button>
+      >{{ p + 1 }}</button>
 
       <button
         @click="setPage(filters.page + 1)"
@@ -210,49 +255,36 @@ watch(() => route.query.keyword, (kw) => {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 20px; }
+.page { display: flex; flex-direction: column; gap: 16px; }
 
 /* Header */
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .page-title  { font-size: 22px; font-weight: 900; color: var(--tx-1); }
 .page-sub    { font-size: 13px; color: var(--tx-5); margin-top: 3px; }
 
-/* Filters */
-.filters-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 18px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-
+/* ── Search ── */
 .search-wrap {
-  flex: 1;
-  min-width: 200px;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 12px;
-  padding: 0 12px;
-  height: 42px;
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  padding: 0 14px;
+  height: 48px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   transition: border-color 0.2s;
 }
 .search-wrap:focus-within {
   border-color: rgba(216, 90, 48, 0.5);
-  background: var(--bg-input-f);
 }
-.si { width: 16px; height: 16px; color: var(--tx-5); flex-shrink: 0; }
+.si { width: 18px; height: 18px; color: var(--tx-5); flex-shrink: 0; }
 .search-input {
   flex: 1;
   background: none;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--tx-2);
   min-width: 0;
 }
@@ -262,47 +294,126 @@ watch(() => route.query.keyword, (kw) => {
   border: none;
   color: var(--tx-5);
   cursor: pointer;
-  font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-.clear-btn:hover { color: var(--tx-3); }
-
-.filter-select {
-  height: 42px;
-  padding: 0 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 12px;
-  color: var(--tx-3);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.filter-select:focus  { border-color: rgba(216,90,48,0.5); }
-.filter-select option { background: var(--bg-surface); color: var(--tx-2); }
-
-.reset-btn {
+  padding: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+.clear-btn svg { width: 14px; height: 14px; }
+.clear-btn:hover { color: var(--tx-3); }
+
+/* ── Filters Block ── */
+.filters-block {
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  border-radius: 18px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.filter-group-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--tx-5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+/* Chips row */
+.chips-row {
+  display: flex;
   gap: 6px;
-  height: 42px;
-  padding: 0 14px;
-  background: rgba(239,68,68,0.1);
+  flex-wrap: wrap;
+}
+.chips-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.chips-scroll::-webkit-scrollbar { display: none; }
+
+/* ── Chip base ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  background: var(--bg-input);
+  color: var(--tx-4);
+  border-color: var(--bd-md);
+}
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+/* Dot indicator */
+.chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Difficulty variants */
+.chip-easy   .chip-dot { background: #10b981; }
+.chip-medium .chip-dot { background: #eab308; }
+.chip-hard   .chip-dot { background: #ef4444; }
+
+.chip-easy:hover,   .chip-easy.chip-active   { background: rgba(16, 185, 129, 0.12); border-color: rgba(16,185,129,0.4);  color: #10b981; }
+.chip-medium:hover, .chip-medium.chip-active { background: rgba(234, 179, 8, 0.12);  border-color: rgba(234,179,8,0.4);   color: #ca8a04; }
+.chip-hard:hover,   .chip-hard.chip-active   { background: rgba(239, 68, 68, 0.12);  border-color: rgba(239,68,68,0.4);   color: #ef4444; }
+
+/* Category chips */
+.chip-cat:hover {
+  background: rgba(216,90,48,0.08);
+  border-color: rgba(216,90,48,0.3);
+  color: #E8713E;
+}
+.chip-cat-active {
+  background: rgba(216,90,48,0.14) !important;
+  border-color: rgba(216,90,48,0.5) !important;
+  color: #E8713E !important;
+}
+
+/* Reset row */
+.filter-reset-row { display: flex; }
+.reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(239,68,68,0.08);
   border: 1px solid rgba(239,68,68,0.2);
-  border-radius: 12px;
+  border-radius: 100px;
   color: #f87171;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
-.reset-btn:hover { background: rgba(239,68,68,0.18); }
-.reset-btn svg { width: 14px; height: 14px; }
+.reset-btn:hover { background: rgba(239,68,68,0.16); }
+.reset-btn svg { width: 12px; height: 12px; }
 
 /* Grid */
 .recipe-grid {

@@ -2,16 +2,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { platformApi } from '@/api/platform'
-import { useLangStore } from '@/stores/langStore'
+import { useLangStore, type Lang } from '@/stores/langStore'
 import { useThemeStore } from '@/stores/themeStore'
 
 const lang  = useLangStore()
 const theme = useThemeStore()
 
-const langFlags = [
-  { code: 'uz', flag: '🇺🇿' },
-  { code: 'ru', flag: '🇷🇺' },
-  { code: 'en', flag: '🇬🇧' },
+const langFlags: { code: Lang; label: string }[] = [
+  { code: 'uz', label: 'UZ' },
+  { code: 'ru', label: 'RU' },
+  { code: 'en', label: 'EN' },
 ]
 
 const features = computed(() => [
@@ -111,7 +111,7 @@ onMounted(async () => {
               class="lang-flag-btn"
               :class="{ 'flag-active': lang.lang === l.code }"
               @click="lang.setLang(l.code)"
-            >{{ l.flag }}</button>
+            >{{ l.label }}</button>
           </div>
 
           <!-- Theme toggle -->
@@ -405,22 +405,22 @@ onMounted(async () => {
   gap: 2px;
 }
 .lang-flag-btn {
-  width: 32px;
-  height: 32px;
+  padding: 4px 8px;
   border: none;
   background: none;
-  font-size: 18px;
-  line-height: 1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   cursor: pointer;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.45;
-  transition: opacity 0.15s, background 0.15s;
+  color: var(--tx-5);
+  transition: color 0.15s, background 0.15s;
 }
-.lang-flag-btn:hover { opacity: 0.8; background: var(--bd); }
-.lang-flag-btn.flag-active { opacity: 1; background: rgba(216, 90, 48, 0.12); }
+.lang-flag-btn:hover { color: var(--tx-3); background: var(--bd); }
+.lang-flag-btn.flag-active { color: #E8713E; background: rgba(216, 90, 48, 0.12); }
 
 /* ── Hero ── */
 .hero {

@@ -134,24 +134,41 @@ function toggleFav(e) {
   position: absolute;
   top: 8px;
   right: 8px;
-  padding: 3px 8px;
-  border-radius: 8px;
-  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+.diff-easy   {
+  background: rgba(16, 185, 129, 0.82);
+  color: #fff;
+}
+.diff-medium {
+  background: rgba(234, 179, 8, 0.88);
+  color: #fff;
+}
+.diff-hard   {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
 }
 
 .badge-cat {
   position: absolute;
   bottom: 8px;
   left: 8px;
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 4px 10px;
+  border-radius: 20px;
   font-size: 10px;
-  font-weight: 600;
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(4px);
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.52);
+  color: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
 /* ── Heart button ── */
