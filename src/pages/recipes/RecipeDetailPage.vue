@@ -28,7 +28,7 @@ const deleting      = ref(false)
 
 const canEdit = computed(() =>
   auth.isAuthenticated &&
-  (auth.isAdmin || String(auth.user?.id) === String(recipe.value?.authorId))
+  (auth.isAdmin || (auth.isBlogger && String(auth.user?.id) === String(recipe.value?.authorId)))
 )
 
 async function deleteRecipe() {

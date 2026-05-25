@@ -747,8 +747,8 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
           </div>
 
           <!-- Role badge -->
-          <span :class="u.role === 'ADMIN' ? 'badge-admin' : 'badge-user'">
-            {{ u.role === 'ADMIN' ? lang.t('admin.role_admin') : lang.t('admin.role_user') }}
+          <span :class="u.role === 'ADMIN' ? 'badge-admin' : u.role === 'BLOGGER' ? 'badge-blogger' : 'badge-user'">
+            {{ u.role === 'ADMIN' ? '👑 Admin' : u.role === 'BLOGGER' ? '👨‍🍳 Blogger' : '👤 User' }}
           </span>
 
           <!-- Active badge -->
@@ -853,12 +853,17 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
                       :class="['role-btn', userForm.role === 'USER' ? 'role-btn-active-user' : '']"
                       @click="userForm.role = 'USER'"
                       type="button"
-                    >👤 {{ lang.t('admin.role_user') }}</button>
+                    >👤 User</button>
+                    <button
+                      :class="['role-btn', userForm.role === 'BLOGGER' ? 'role-btn-active-blogger' : '']"
+                      @click="userForm.role = 'BLOGGER'"
+                      type="button"
+                    >👨‍🍳 Blogger</button>
                     <button
                       :class="['role-btn', userForm.role === 'ADMIN' ? 'role-btn-active-admin' : '']"
                       @click="userForm.role = 'ADMIN'"
                       type="button"
-                    >👑 {{ lang.t('admin.role_admin') }}</button>
+                    >👑 Admin</button>
                   </div>
                 </div>
 
@@ -1274,10 +1279,24 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
   border-color: rgba(99,102,241,0.4);
   color: #818cf8;
 }
+.role-btn-active-blogger {
+  background: rgba(216,90,48,0.15);
+  border-color: rgba(216,90,48,0.4);
+  color: #E8713E;
+}
 .role-btn-active-admin {
   background: rgba(139,92,246,0.15);
   border-color: rgba(139,92,246,0.4);
   color: #a78bfa;
+}
+.badge-blogger {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(216,90,48,0.15);
+  color: #E8713E;
 }
 
 /* Password section */

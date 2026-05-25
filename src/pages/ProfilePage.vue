@@ -180,6 +180,39 @@ const stats = [
   { icon: '📝', label: () => lang.t('profile.stat_recipes'), val: () => recipes.value.length },
   { icon: '📅', label: () => lang.t('profile.stat_meal'),    val: () => mealPlanCount.value },
 ]
+
+// ── Blogger modal ─────────────────────────────────────────────────
+const showBloggerModal  = ref(false)
+const termsScrolled     = ref(false)
+const bloggerLoading    = ref(false)
+const bloggerError      = ref('')
+const bloggerSuccess    = ref(false)
+
+function openBloggerModal() {
+  termsScrolled.value  = false
+  bloggerError.value   = ''
+  bloggerSuccess.value = false
+  showBloggerModal.value = true
+}
+
+function onTermsScroll(e) {
+  const el = e.target
+  termsScrolled.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 20
+}
+
+async function confirmBecomeBlogger() {
+  bloggerLoading.value = true
+  bloggerError.value   = ''
+  const err = await auth.becomeBlogger()
+  bloggerLoading.value = false
+  if (err) {
+    bloggerError.value = err
+  } else {
+    bloggerSuccess.value = true
+    await auth.fetchUser()
+    setTimeout(() => { showBloggerModal.value = false; bloggerSuccess.value = false }, 1800)
+  }
+}
 </script>
 
 <template>
@@ -219,14 +252,17 @@ const stats = [
               />
               <span :style="auth.avatarUrl ? 'display:none' : ''">{{ auth.initials }}</span>
             </div>
-            <div class="avatar-badge" :class="auth.isAdmin ? 'badge-admin' : 'badge-user'">
-              {{ auth.isAdmin ? '👑' : '🧑' }}
+            <div class="avatar-badge"
+              :class="auth.isAdmin ? 'badge-admin' : auth.isBlogger ? 'badge-blogger' : 'badge-user'">
+              {{ auth.isAdmin ? '👑' : auth.isBlogger ? '👨‍🍳' : '🧑' }}
             </div>
           </div>
 
           <div class="profile-info">
             <h1 class="profile-name">{{ auth.displayName }}</h1>
-            <p class="profile-role">{{ auth.isAdmin ? lang.t('profile.admin') : lang.t('profile.user') }}</p>
+            <p class="profile-role">
+            {{ auth.isAdmin ? lang.t('profile.admin') : auth.isBlogger ? '👨‍🍳 Blogger' : lang.t('profile.user') }}
+          </p>
           </div>
 
           <!-- Stats -->
@@ -272,16 +308,42 @@ const stats = [
           <div class="ir-body">
             <div class="ir-label">{{ lang.t('profile.role') }}</div>
             <div class="ir-val">
-              <span class="role-badge" :class="auth.isAdmin ? 'badge-admin' : 'badge-user'">
-                {{ auth.role }}
+              <span class="role-badge"
+                :class="auth.isAdmin ? 'badge-admin' : auth.isBlogger ? 'badge-blogger' : 'badge-user'">
+                {{ auth.isAdmin ? '👑 Admin' : auth.isBlogger ? '👨‍🍳 Blogger' : '👤 Foydalanuvchi' }}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ── My recipes ── -->
-      <div class="section">
+      <!-- ── Blogger bo'lish banneri (faqat USER uchun) ── -->
+      <div v-if="!auth.isBlogger" class="blogger-banner" @click="openBloggerModal">
+        <div class="bb-left">
+          <div class="bb-icon">👨‍🍳</div>
+          <div class="bb-text">
+            <div class="bb-title">Blogger bo'lish</div>
+            <div class="bb-sub">Retseptlaringizni hammaga ulashing va o'z auditoriyangizni to'plang</div>
+          </div>
+        </div>
+        <div class="bb-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ── Blogger badge (faqat BLOGGER uchun) ── -->
+      <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active-card">
+        <div class="bac-icon">✅</div>
+        <div class="bac-text">
+          <div class="bac-title">Siz Bloggersi!</div>
+          <div class="bac-sub">Endi retseptlaringizni qo'shishingiz va barchaga ko'rsatishingiz mumkin</div>
+        </div>
+      </div>
+
+      <!-- ── My recipes (faqat BLOGGER va ADMIN) ── -->
+      <div v-if="auth.isBlogger" class="section">
         <div class="section-header">
           <h2 class="section-title">{{ lang.t('profile.my_recipes') }}</h2>
           <button @click="openCreateRecipe" class="btn-add-recipe">
@@ -323,6 +385,23 @@ const stats = [
         </div>
       </div>
 
+      <!-- ── USER uchun: Saqlangan retseptlar + Blogger taklifi ── -->
+      <div v-else class="section">
+        <div class="section-header">
+          <h2 class="section-title">💾 Saqlangan retseptlar</h2>
+        </div>
+        <div class="user-upgrade-hint">
+          <div class="uuh-icon">🍳</div>
+          <div class="uuh-body">
+            <div class="uuh-title">O'z retseptingizni ulashmoqchimisiz?</div>
+            <div class="uuh-sub">Blogger bo'ling — retseptlaringizni qo'shing va barchaga ko'rsating</div>
+            <button @click="openBloggerModal" class="uuh-btn">
+              👨‍🍳 Blogger bo'lish
+            </button>
+          </div>
+        </div>
+      </div>
+
     </template>
 
     <!-- Recipe Form Modal -->
@@ -332,6 +411,80 @@ const stats = [
       @close="showRecipeModal = false"
       @saved="handleRecipeSaved"
     />
+
+    <!-- Blogger bo'lish Modal -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="showBloggerModal" class="modal-overlay" @click.self="showBloggerModal = false">
+          <div class="modal-box blogger-modal">
+            <div class="modal-header">
+              <div class="blogger-modal-icon">👨‍🍳</div>
+              <div>
+                <h2 class="modal-title">Blogger bo'lish</h2>
+                <p class="blogger-modal-sub">Foydalanish shartlarini o'qib, tasdiqlang</p>
+              </div>
+              <button class="modal-close" @click="showBloggerModal = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Blogger imkoniyatlari -->
+            <div class="blogger-perks">
+              <div class="perk-item">
+                <span class="perk-icon">📝</span>
+                <span>Retsept qo'shish va tahrirlash</span>
+              </div>
+              <div class="perk-item">
+                <span class="perk-icon">🌍</span>
+                <span>Retseptlaringiz barcha foydalanuvchilarga ko'rinadi</span>
+              </div>
+              <div class="perk-item">
+                <span class="perk-icon">📊</span>
+                <span>Ko'rishlar, baholar va izohlarni kuzatish</span>
+              </div>
+              <div class="perk-item">
+                <span class="perk-icon">🏷️</span>
+                <span>Profil sahifangizda "Blogger" belgisi</span>
+              </div>
+            </div>
+
+            <!-- Shartlar matni -->
+            <div class="terms-box" @scroll="onTermsScroll">
+              <h4 class="terms-title">Foydalanish shartlari</h4>
+              <p>Ushbu platformaga blogger sifatida ro'yxatdan o'tar ekansiz, quyidagi shartlarga rozilik bildirasiz:</p>
+              <ol class="terms-list">
+                <li>Siz tomonidan yuklangan barcha retseptlar va rasmlar sizning intellektual mulkingiz hisoblanadi va ularni ulashishga huquqingiz bor.</li>
+                <li>Boshqalarning mualliflik huquqini buzuvchi kontent yuklab bo'lmaydi.</li>
+                <li>Retseptlar haqiqiy, ishonchli va sog'lom bo'lishi kerak — zararli yoki noto'g'ri ma'lumot joylashtirib bo'lmaydi.</li>
+                <li>Noo'rin, haqoratli yoki spam xarakteri tashuvchi kontent joylashtirib bo'lmaydi.</li>
+                <li>Platforma ma'muriyati qoidabuzarlik holatida hisobingizni blogger statusidan mahrum qilish huquqiga ega.</li>
+                <li>Siz platformaning maxfiylik siyosatiga va foydalanish qoidalariga to'liq rozilik bildirasiz.</li>
+              </ol>
+              <p class="terms-scroll-hint" v-if="!termsScrolled">↓ Davom etish uchun pastga aylantiring</p>
+            </div>
+
+            <div v-if="bloggerError" class="modal-error">{{ bloggerError }}</div>
+            <div v-if="bloggerSuccess" class="modal-success">🎉 Tabriklaymiz! Siz endi Bloggersiz!</div>
+
+            <div class="modal-footer">
+              <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">
+                Bekor qilish
+              </button>
+              <button
+                @click="confirmBecomeBlogger"
+                class="btn-blogger-confirm"
+                :disabled="!termsScrolled || bloggerLoading"
+              >
+                <span v-if="bloggerLoading" class="btn-spinner"></span>
+                <span>{{ bloggerLoading ? 'Saqlanmoqda...' : 'Qabul qilaman va Blogger bo\'laman' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Profile Edit Modal -->
     <Teleport to="body">
@@ -493,8 +646,9 @@ const stats = [
   justify-content: center;
   font-size: 12px;
 }
-.badge-admin { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.badge-user  { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.badge-admin   { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.badge-blogger { background: linear-gradient(135deg, #D85A30, #E8713E); }
+.badge-user    { background: linear-gradient(135deg, #3b82f6, #6366f1); }
 
 .profile-name { font-size: 22px; font-weight: 900; color: var(--tx-1); }
 .profile-role { font-size: 13px; color: #E8713E; font-weight: 700; margin-top: 3px; }
@@ -598,8 +752,9 @@ const stats = [
   font-size: 12px;
   font-weight: 800;
 }
-.role-badge.badge-admin { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.role-badge.badge-user  { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+.role-badge.badge-admin   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.role-badge.badge-blogger { background: rgba(216,90,48,0.15);  color: #E8713E; }
+.role-badge.badge-user    { background: rgba(59,130,246,0.15);  color: #60a5fa; }
 
 /* ── Recipes section ── */
 .section { display: flex; flex-direction: column; gap: 14px; }
@@ -963,6 +1118,152 @@ const stats = [
   transition: transform 0.2s, box-shadow 0.2s;
 }
 .btn-save:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(216,90,48,0.4); }
+
+/* ── USER upgrade hint (retsept section da) ── */
+.user-upgrade-hint {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  background: var(--bg-card);
+  border: 1px dashed rgba(216,90,48,0.3);
+  border-radius: 20px;
+}
+.uuh-icon  { font-size: 40px; flex-shrink: 0; }
+.uuh-body  { display: flex; flex-direction: column; gap: 6px; }
+.uuh-title { font-size: 14px; font-weight: 800; color: var(--tx-2); }
+.uuh-sub   { font-size: 12px; color: var(--tx-5); line-height: 1.4; }
+.uuh-btn {
+  margin-top: 4px;
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 3px 10px rgba(216,90,48,0.3);
+}
+.uuh-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(216,90,48,0.4); }
+
+/* ── Blogger banner ── */
+.blogger-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(216,90,48,0.12), rgba(232,113,62,0.06));
+  border: 1px solid rgba(216,90,48,0.3);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  gap: 14px;
+}
+.blogger-banner:hover {
+  background: linear-gradient(135deg, rgba(216,90,48,0.2), rgba(232,113,62,0.12));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(216,90,48,0.15);
+}
+.bb-left { display: flex; align-items: center; gap: 14px; flex: 1; }
+.bb-icon { font-size: 36px; flex-shrink: 0; }
+.bb-text  { display: flex; flex-direction: column; gap: 3px; }
+.bb-title { font-size: 15px; font-weight: 900; color: #E8713E; }
+.bb-sub   { font-size: 12px; color: var(--tx-5); line-height: 1.4; }
+.bb-arrow svg { width: 20px; height: 20px; color: #E8713E; flex-shrink: 0; }
+
+/* ── Blogger active card ── */
+.blogger-active-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(22,163,74,0.05));
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 20px;
+}
+.bac-icon  { font-size: 32px; flex-shrink: 0; }
+.bac-title { font-size: 15px; font-weight: 900; color: #4ade80; }
+.bac-sub   { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
+
+/* ── Blogger Modal ── */
+.blogger-modal { max-width: 480px; }
+.blogger-modal .modal-header { align-items: flex-start; gap: 12px; }
+.blogger-modal-icon { font-size: 32px; flex-shrink: 0; }
+.blogger-modal-sub  { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+
+.blogger-perks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 24px;
+  margin-bottom: 4px;
+}
+.perk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-input);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-2);
+}
+.perk-icon { font-size: 18px; flex-shrink: 0; }
+
+.terms-box {
+  margin: 0 24px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--tx-4);
+  line-height: 1.6;
+  scroll-behavior: smooth;
+}
+.terms-title { font-size: 13px; font-weight: 800; color: var(--tx-2); margin: 0 0 8px; }
+.terms-list  { padding-left: 16px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.terms-scroll-hint {
+  text-align: center;
+  color: var(--tx-5);
+  font-size: 11px;
+  margin-top: 8px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.btn-blogger-confirm {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(216,90,48,0.3);
+  transition: all 0.2s;
+}
+.btn-blogger-confirm:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(216,90,48,0.4);
+}
+.btn-blogger-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 /* Modal transition */
 .modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }

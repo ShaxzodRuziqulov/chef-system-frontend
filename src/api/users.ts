@@ -20,4 +20,8 @@ export const usersApi = {
   /** Foydalanuvchini faollashtirish */
   activate: (id: string) =>
     api.put(`/users/${id}/activate`),
+
+  /** Shartlarga rozilik berib BLOGGER bo'lish */
+  becomeBlogger: () =>
+    api.post('/users/become-blogger', { termsAccepted: true }),
 }

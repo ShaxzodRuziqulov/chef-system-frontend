@@ -61,6 +61,13 @@ function toggleFav(e) {
     <!-- Body -->
     <div class="card-body">
       <h3 class="card-title">{{ title }}</h3>
+
+      <!-- Muallif -->
+      <div v-if="recipe.authorFullName" class="card-author">
+        <span class="author-icon">👨‍🍳</span>
+        <span class="author-name">{{ recipe.authorFullName }}</span>
+      </div>
+
       <div class="card-meta">
         <span>⏱ {{ (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0) }} {{ lang.t('common.min') }}</span>
         <span>·</span>
@@ -215,5 +222,22 @@ function toggleFav(e) {
   margin-left: auto;
   color: #eab308;
   font-weight: 700;
+}
+
+/* Muallif */
+.card-author {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #E8713E;
+}
+.author-icon { font-size: 12px; }
+.author-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
 }
 </style>

@@ -2,6 +2,7 @@ import { defineStore }      from 'pinia'
 import { ref, computed }    from 'vue'
 import { useRouter }        from 'vue-router'
 import { authApi }          from '@/api/auth'
+import { usersApi }         from '@/api/users'
 import { tokenStorage }     from '@/api/axios'
 import type {
   AuthUserResponse,
@@ -89,6 +90,11 @@ export const useAuthStore = defineStore('auth', () => {
   /** Foydalanuvchi ADMIN rolida mi? */
   const isAdmin = computed<boolean>(
     () => user.value?.roles === 'ADMIN',
+  )
+
+  /** Foydalanuvchi BLOGGER rolida mi? */
+  const isBlogger = computed<boolean>(
+    () => user.value?.roles === 'BLOGGER' || user.value?.roles === 'ADMIN',
   )
 
   /** To'liq ism yoki "Foydalanuvchi" */
@@ -345,6 +351,33 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * BECOME BLOGGER — shartlarga rozilik berib, BLOGGER bo'lish
+   * @returns null — muvaffaqiyatli, string — xato xabari
+   */
+  async function becomeBlogger(): Promise<string | null> {
+    loading.value = true
+    error.value   = null
+    try {
+      const response = await usersApi.becomeBlogger()
+      const userData = (response.data as any)?.data ?? response.data
+      // Rolni yangilash: UserDto formatidan AuthUserResponse ga moslashtirish
+      const updated: AuthUserResponse = {
+        ...user.value!,
+        roles: userData.role ?? userData.roles ?? 'BLOGGER',
+      }
+      _persistUser(updated)
+      return null
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } }
+      const message  = axiosErr.response?.data?.message ?? 'Xatolik yuz berdi'
+      error.value    = { message }
+      return message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
    * Xatoni tozalash (form submit oldidan chaqirish mumkin)
    */
   function clearError(): void {
@@ -363,6 +396,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Getters
     isAuthenticated,
     isAdmin,
+    isBlogger,
     displayName,
     avatarUrl,
     initials,
@@ -374,6 +408,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     fetchUser,
     updateProfile,
+    becomeBlogger,
     initialize,
     clearError,
   }
