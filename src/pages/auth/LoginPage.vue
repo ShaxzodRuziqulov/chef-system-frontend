@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useForm, useField }        from 'vee-validate'
-import * as yup                     from 'yup'
-import { useAuthStore }             from '@/stores/authStore'
-import { useRoute }                 from 'vue-router'
-import { useLangStore }             from '@/stores/langStore'
-import LangSwitcher                 from '@/components/ui/LangSwitcher.vue'
+import {computed, onMounted, ref} from 'vue'
+import {useField, useForm} from 'vee-validate'
+import * as yup from 'yup'
+import {useAuthStore} from '@/stores/authStore'
+import {useRoute, useRouter} from 'vue-router'
+import {useLangStore} from '@/stores/langStore'
+import {authApi} from '@/api/auth'
 
-const auth  = useAuthStore()
+const auth = useAuthStore()
 const route = useRoute()
-const lang  = useLangStore()
+const router = useRouter()
+const lang = useLangStore()
+
+function goBack() {
+  router.push('/')
+}
 
 const redirectPath = computed(() =>
-  typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    typeof route.query.redirect === 'string' ? route.query.redirect : '/'
 )
 
 const schema = yup.object({
@@ -20,22 +25,61 @@ const schema = yup.object({
   password: yup.string().required("Parol kiritilishi shart").min(4, 'Kamida 4 ta belgi'),
 })
 
-const { handleSubmit, meta } = useForm({ validationSchema: schema })
+const {handleSubmit, meta} = useForm({validationSchema: schema})
 
-const { value: username, errorMessage: usernameError, meta: usernameMeta } = useField<string>('username')
-const { value: password, errorMessage: passwordError, meta: passwordMeta } = useField<string>('password')
+const {value: username, errorMessage: usernameError, meta: usernameMeta} = useField<string>('username')
+const {value: password, errorMessage: passwordError, meta: passwordMeta} = useField<string>('password')
 
 const showPassword = ref(false)
-const serverError  = ref<string | null>(null)
-const rememberMe   = ref(false)
+const serverError = ref<string | null>(null)
+const rememberMe = ref(true)  // default: eslab qolish yoqilgan
 
+// ── Login ─────────────────────────────────────────────────────────────────
 const onSubmit = handleSubmit(async (values) => {
   serverError.value = null
-  const error = await auth.login({ username: values.username, password: values.password }, redirectPath.value)
+  const error = await auth.login(
+      {username: values.username, password: values.password},
+      redirectPath.value,
+      rememberMe.value,   // ← remember me
+  )
   if (error) serverError.value = error
 })
 
-onMounted(() => { auth.clearError(); serverError.value = null })
+// ── Forgot Password ────────────────────────────────────────────────────────
+const showForgot = ref(false)
+const forgotInput = ref('')
+const forgotLoading = ref(false)
+const forgotError = ref('')
+const forgotSuccess = ref(false)
+
+function openForgot() {
+  forgotInput.value = ''
+  forgotError.value = ''
+  forgotSuccess.value = false
+  showForgot.value = true
+}
+
+async function submitForgot() {
+  if (!forgotInput.value.trim()) {
+    forgotError.value = 'Username yoki email kiriting'
+    return
+  }
+  forgotLoading.value = true
+  forgotError.value = ''
+  try {
+    await authApi.forgotPassword(forgotInput.value.trim())
+    forgotSuccess.value = true
+  } catch (e: any) {
+    forgotError.value = e?.response?.data?.message || 'Xatolik yuz berdi'
+  } finally {
+    forgotLoading.value = false
+  }
+}
+
+onMounted(() => {
+  auth.clearError();
+  serverError.value = null
+})
 </script>
 
 <template>
@@ -49,7 +93,12 @@ onMounted(() => { auth.clearError(); serverError.value = null })
     <div class="card">
       <!-- Logo -->
       <div class="card-lang">
-        <LangSwitcher />
+        <button class="back-btn" @click="goBack" :title="lang.t('common.back') || 'Orqaga'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m7-7l-7 7 7 7"/>
+          </svg>
+          <span>{{ lang.t('common.back') || 'Orqaga' }}</span>
+        </button>
       </div>
       <div class="logo-wrap">
         <div class="logo-icon">👨‍🍳</div>
@@ -63,17 +112,20 @@ onMounted(() => { auth.clearError(); serverError.value = null })
         <!-- Username -->
         <div class="field-group">
           <label class="field-label">{{ lang.t('auth.username') }}</label>
-          <div class="input-wrap" :class="{ 'is-error': usernameError && usernameMeta.dirty, 'is-valid': usernameMeta.valid && username }">
+          <div class="input-wrap"
+               :class="{ 'is-error': usernameError && usernameMeta.dirty, 'is-valid': usernameMeta.valid && username }">
             <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
             </svg>
             <input
-              v-model="username"
-              type="text"
-              :placeholder="lang.t('auth.username')"
-              class="field-input"
+                v-model="username"
+                type="text"
+                :placeholder="lang.t('auth.username')"
+                class="field-input"
             />
-            <svg v-if="usernameMeta.valid && username" class="valid-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <svg v-if="usernameMeta.valid && username" class="valid-icon" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
             </svg>
           </div>
@@ -85,21 +137,25 @@ onMounted(() => { auth.clearError(); serverError.value = null })
           <label class="field-label">{{ lang.t('auth.password') }}</label>
           <div class="input-wrap" :class="{ 'is-error': passwordError && passwordMeta.dirty }">
             <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
             <input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              placeholder="••••••••"
-              class="field-input"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="••••••••"
+                class="field-input"
             />
             <button type="button" class="toggle-btn" @click="showPassword = !showPassword">
               <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
               </svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
               </svg>
             </button>
           </div>
@@ -110,7 +166,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
         <div class="options-row">
           <label class="remember-label">
             <div class="checkbox-wrap">
-              <input type="checkbox" v-model="rememberMe" class="checkbox-input" />
+              <input type="checkbox" v-model="rememberMe" class="checkbox-input"/>
               <div class="checkbox-box">
                 <svg v-if="rememberMe" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
@@ -119,13 +175,16 @@ onMounted(() => { auth.clearError(); serverError.value = null })
             </div>
             <span>{{ lang.t('auth.remember') || 'Eslab qolish' }}</span>
           </label>
-          <a href="#" class="forgot-link">{{ lang.t('auth.forgot') || 'Parolni unutdingizmi?' }}</a>
+          <button type="button" class="forgot-link" @click="openForgot">
+            {{ lang.t('auth.forgot') || 'Parolni unutdingizmi?' }}
+          </button>
         </div>
 
         <!-- Server Error -->
         <div v-if="serverError" class="server-error">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
           </svg>
           <span>{{ serverError }}</span>
         </div>
@@ -143,11 +202,70 @@ onMounted(() => { auth.clearError(); serverError.value = null })
 
       <!-- Footer -->
       <div class="card-footer">
-        <p>{{ lang.t('auth.no_account') }} <RouterLink to="/register">{{ lang.t('auth.register_link') }}</RouterLink></p>
+        <p>{{ lang.t('auth.no_account') }}
+          <RouterLink to="/register">{{ lang.t('auth.register_link') }}</RouterLink>
+        </p>
         <span>© {{ new Date().getFullYear() }} OshPaz</span>
       </div>
     </div>
   </div>
+
+  <!-- ── Forgot Password Modal ── -->
+  <Teleport to="body">
+    <Transition name="mfade">
+      <div v-if="showForgot" class="fp-overlay" @click.self="showForgot = false">
+        <div class="fp-box">
+          <div class="fp-head">
+            <div class="fp-icon">🔑</div>
+            <div>
+              <div class="fp-title">Parolni tiklash</div>
+              <div class="fp-sub">Username yoki emailingizni kiriting</div>
+            </div>
+            <button class="fp-close" @click="showForgot = false">✕</button>
+          </div>
+
+          <template v-if="!forgotSuccess">
+            <div class="fp-body">
+              <div class="fp-input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="fp-inp-icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                <input
+                    v-model="forgotInput"
+                    type="text"
+                    placeholder="username yoki email@example.com"
+                    class="fp-input"
+                    @keyup.enter="submitForgot"
+                />
+              </div>
+              <p v-if="forgotError" class="fp-error">{{ forgotError }}</p>
+            </div>
+            <div class="fp-foot">
+              <button class="fp-cancel" @click="showForgot = false" :disabled="forgotLoading">Bekor qilish</button>
+              <button class="fp-submit" @click="submitForgot" :disabled="forgotLoading">
+                <span v-if="forgotLoading" class="fp-spin"/>
+                {{ forgotLoading ? 'Yuborilmoqda...' : 'Yuborish' }}
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="fp-success">
+              <div class="fp-ok-icon">✉️</div>
+              <div class="fp-ok-title">Yuborildi!</div>
+              <p class="fp-ok-text">
+                Agar <strong>{{ forgotInput }}</strong> tizimda ro'yxatga olingan bo'lsa,
+                parolni tiklash havolasi emailingizga yuboriladi.
+              </p>
+              <button class="fp-submit" @click="showForgot = false">Yopish</button>
+            </div>
+          </template>
+
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -171,13 +289,41 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   pointer-events: none;
   animation: blobMove 8s ease-in-out infinite alternate;
 }
-.blob-1 { width: 400px; height: 400px; top: -100px; left: -100px; background: rgba(216, 90, 48, 0.2); animation-delay: 0s; }
-.blob-2 { width: 350px; height: 350px; bottom: -80px; right: -80px; background: rgba(16, 185, 129, 0.15); animation-delay: 2s; }
-.blob-3 { width: 280px; height: 280px; top: 40%; right: 15%; background: rgba(139, 92, 246, 0.1); animation-delay: 4s; }
+
+.blob-1 {
+  width: 400px;
+  height: 400px;
+  top: -100px;
+  left: -100px;
+  background: rgba(216, 90, 48, 0.2);
+  animation-delay: 0s;
+}
+
+.blob-2 {
+  width: 350px;
+  height: 350px;
+  bottom: -80px;
+  right: -80px;
+  background: rgba(16, 185, 129, 0.15);
+  animation-delay: 2s;
+}
+
+.blob-3 {
+  width: 280px;
+  height: 280px;
+  top: 40%;
+  right: 15%;
+  background: rgba(139, 92, 246, 0.1);
+  animation-delay: 4s;
+}
 
 @keyframes blobMove {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(30px, -40px) scale(1.1); }
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(30px, -40px) scale(1.1);
+  }
 }
 
 /* ── Card ── */
@@ -197,13 +343,46 @@ onMounted(() => { auth.clearError(); serverError.value = null })
 
 .card-lang {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 20px;
 }
 
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--bd-xl);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--tx-4);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.back-btn:hover {
+  border-color: rgba(216, 90, 48, 0.4);
+  color: #E8713E;
+  background: rgba(216, 90, 48, 0.06);
+}
+
+.back-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 @keyframes cardIn {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ── Logo ── */
@@ -212,6 +391,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   justify-content: center;
   margin-bottom: 20px;
 }
+
 .logo-icon {
   width: 76px;
   height: 76px;
@@ -233,6 +413,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   letter-spacing: -0.5px;
   margin-bottom: 8px;
 }
+
 .subtitle {
   text-align: center;
   font-size: 15px;
@@ -253,6 +434,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   flex-direction: column;
   gap: 8px;
 }
+
 .field-label {
   font-size: 12px;
   font-weight: 700;
@@ -273,15 +455,18 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   height: 56px;
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
+
 .input-wrap:focus-within {
   background: var(--bg-input-f);
   border-color: rgba(216, 90, 48, 0.6);
   box-shadow: 0 0 0 4px rgba(216, 90, 48, 0.1);
 }
+
 .input-wrap.is-error {
   border-color: rgba(239, 68, 68, 0.5);
   background: rgba(239, 68, 68, 0.05);
 }
+
 .input-wrap.is-valid {
   border-color: rgba(16, 185, 129, 0.5);
 }
@@ -293,6 +478,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   color: var(--tx-5);
   transition: color 0.2s;
 }
+
 .input-wrap:focus-within .input-icon {
   color: #E8713E;
 }
@@ -306,6 +492,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   color: var(--tx-1);
   min-width: 0;
 }
+
 .field-input::placeholder {
   color: var(--tx-5);
 }
@@ -328,7 +515,11 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   transition: color 0.2s;
   flex-shrink: 0;
 }
-.toggle-btn:hover { color: var(--tx-1); }
+
+.toggle-btn:hover {
+  color: var(--tx-1);
+}
+
 .toggle-btn svg {
   width: 20px;
   height: 20px;
@@ -348,6 +539,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   align-items: center;
   justify-content: space-between;
 }
+
 .remember-label {
   display: flex;
   align-items: center;
@@ -358,7 +550,10 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   font-weight: 600;
   color: var(--tx-4);
 }
-.remember-label:hover { color: var(--tx-3); }
+
+.remember-label:hover {
+  color: var(--tx-3);
+}
 
 .checkbox-wrap {
   position: relative;
@@ -366,6 +561,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   height: 20px;
   flex-shrink: 0;
 }
+
 .checkbox-input {
   position: absolute;
   inset: 0;
@@ -374,6 +570,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   width: 100%;
   height: 100%;
 }
+
 .checkbox-box {
   width: 20px;
   height: 20px;
@@ -386,10 +583,12 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   transition: all 0.2s;
   pointer-events: none;
 }
+
 .checkbox-input:checked + .checkbox-box {
   background: #D85A30;
   border-color: #D85A30;
 }
+
 .checkbox-box svg {
   width: 12px;
   height: 12px;
@@ -400,10 +599,234 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   font-size: 14px;
   font-weight: 700;
   color: #E8713E;
-  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
   transition: color 0.2s;
 }
-.forgot-link:hover { color: #F0997B; }
+
+.forgot-link:hover {
+  color: #F0997B;
+}
+
+/* ── Forgot Password Modal ── */
+.fp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.fp-box {
+  background: var(--bg-surface, #1a1a1a);
+  border: 1px solid var(--bd-md);
+  border-radius: 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.fp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.fp-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.fp-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--tx-1);
+}
+
+.fp-sub {
+  font-size: 12px;
+  color: var(--tx-5);
+  margin-top: 2px;
+}
+
+.fp-close {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--bg-input);
+  border-radius: 8px;
+  color: var(--tx-4);
+  cursor: pointer;
+  font-size: 13px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fp-close:hover {
+  background: var(--bd-md);
+  color: var(--tx-1);
+}
+
+.fp-body {
+  padding: 20px;
+}
+
+.fp-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--bd-md);
+  border-radius: 12px;
+  padding: 0 14px;
+  height: 48px;
+  transition: border-color 0.2s;
+}
+
+.fp-input-wrap:focus-within {
+  border-color: rgba(216, 90, 48, 0.6);
+}
+
+.fp-inp-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--tx-5);
+}
+
+.fp-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--tx-1);
+}
+
+.fp-input::placeholder {
+  color: var(--tx-5);
+}
+
+.fp-error {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f87171;
+  padding-left: 2px;
+}
+
+.fp-foot {
+  display: flex;
+  gap: 10px;
+  padding: 0 20px 20px;
+}
+
+.fp-cancel {
+  flex: 1;
+  padding: 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--bd-md);
+  border-radius: 12px;
+  color: var(--tx-3);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.fp-cancel:hover {
+  background: var(--bd-md);
+}
+
+.fp-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fp-submit {
+  flex: 1;
+  padding: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(216, 90, 48, 0.3);
+  transition: all 0.2s;
+}
+
+.fp-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.fp-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.fp-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.fp-ok-icon {
+  font-size: 48px;
+}
+
+.fp-ok-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--tx-1);
+}
+
+.fp-ok-text {
+  font-size: 13px;
+  color: var(--tx-4);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.fp-ok-text strong {
+  color: var(--tx-2);
+}
+
+.fp-spin {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: fp-rot 0.7s linear infinite;
+}
+
+@keyframes fp-rot {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── Server Error ── */
 .server-error {
@@ -418,6 +841,7 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   font-weight: 600;
   color: #fca5a5;
 }
+
 .server-error svg {
   width: 20px;
   height: 20px;
@@ -444,31 +868,46 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
   margin-top: 4px;
 }
+
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 12px 32px rgba(216, 90, 48, 0.45);
 }
-.submit-btn:active:not(:disabled) { transform: translateY(0); }
+
+.submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 .submit-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
 .arrow-icon {
   width: 20px;
   height: 20px;
   transition: transform 0.2s;
 }
-.submit-btn:hover .arrow-icon { transform: translateX(4px); }
+
+.submit-btn:hover .arrow-icon {
+  transform: translateX(4px);
+}
+
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2.5px solid rgba(255,255,255,0.3);
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* ── Footer ── */
 .card-footer {
@@ -480,18 +919,24 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   border-top: 1px solid var(--bd);
   padding-top: 24px;
 }
+
 .card-footer p {
   font-size: 14px;
   color: var(--tx-4);
   font-weight: 500;
 }
+
 .card-footer p a {
   color: #E8713E;
   font-weight: 700;
   text-decoration: none;
   transition: color 0.2s;
 }
-.card-footer p a:hover { color: #F0997B; }
+
+.card-footer p a:hover {
+  color: #F0997B;
+}
+
 .card-footer span {
   font-size: 11px;
   color: var(--tx-6);

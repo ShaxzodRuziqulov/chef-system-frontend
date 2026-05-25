@@ -32,9 +32,18 @@ const STORAGE_KEYS = {
 // localStorage yordamchi funksiyalar
 // ─────────────────────────────────────────────────────────────────
 const storage = {
-  saveTokens(access: string, refresh: string): void {
-    localStorage.setItem(STORAGE_KEYS.ACCESS,  access)
-    localStorage.setItem(STORAGE_KEYS.REFRESH, refresh)
+  /** remember=true → localStorage, false → sessionStorage */
+  saveTokens(access: string, refresh: string, remember = true): void {
+    const store = remember ? localStorage : sessionStorage
+    store.setItem(STORAGE_KEYS.ACCESS,  access)
+    store.setItem(STORAGE_KEYS.REFRESH, refresh)
+    // Qaysi storage ishlatilganini localStorage ga yozib qo'yamiz
+    localStorage.setItem('auth_remember', remember ? '1' : '0')
+  },
+
+  loadToken(key: string): string | null {
+    // Avval localStorage, keyin sessionStorage tekshiramiz
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key) ?? null
   },
 
   saveUser(user: AuthUserResponse): void {
@@ -54,6 +63,9 @@ const storage = {
     localStorage.removeItem(STORAGE_KEYS.ACCESS)
     localStorage.removeItem(STORAGE_KEYS.REFRESH)
     localStorage.removeItem(STORAGE_KEYS.USER)
+    localStorage.removeItem('auth_remember')
+    sessionStorage.removeItem(STORAGE_KEYS.ACCESS)
+    sessionStorage.removeItem(STORAGE_KEYS.REFRESH)
   },
 }
 
@@ -69,10 +81,10 @@ export const useAuthStore = defineStore('auth', () => {
   const user         = ref<AuthUserResponse | null>(storage.loadUser())
 
   /** JWT access token */
-  const accessToken  = ref<string | null>(localStorage.getItem(STORAGE_KEYS.ACCESS))
+  const accessToken  = ref<string | null>(storage.loadToken(STORAGE_KEYS.ACCESS))
 
   /** JWT refresh token */
-  const refreshToken = ref<string | null>(localStorage.getItem(STORAGE_KEYS.REFRESH))
+  const refreshToken = ref<string | null>(storage.loadToken(STORAGE_KEYS.REFRESH))
 
   /** So'rov bajarilayotgan holat */
   const loading      = ref<boolean>(false)
@@ -128,11 +140,10 @@ export const useAuthStore = defineStore('auth', () => {
    * State va localStorage ni bir vaqtda yangilash.
    * Barcha actionlar shu funksiyani ishlatadi.
    */
-  function _persistTokens(access: string, refresh: string): void {
+  function _persistTokens(access: string, refresh: string, remember = true): void {
     accessToken.value  = access
     refreshToken.value = refresh
-    storage.saveTokens(access, refresh)
-    // tokenStorage (axios.ts interceptors uchun ham sync)
+    storage.saveTokens(access, refresh, remember)
     tokenStorage.setTokens(access, refresh)
   }
 
@@ -164,7 +175,7 @@ export const useAuthStore = defineStore('auth', () => {
    *
    * @returns null — muvaffaqiyatli, string — xato xabari
    */
-  async function login(credentials: LoginRequest, redirectTo?: string): Promise<string | null> {
+  async function login(credentials: LoginRequest, redirectTo?: string, remember = true): Promise<string | null> {
     loading.value = true
     error.value   = null
 
@@ -186,8 +197,8 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error('access_token topilmadi')
       }
 
-      // Tokenlarni state + localStorage ga saqlash
-      _persistTokens(payload.access_token, payload.refresh_token)
+      // Tokenlarni saqlash (remember=false → sessionStorage)
+      _persistTokens(payload.access_token, payload.refresh_token, remember)
 
       // Foydalanuvchi ma'lumotlarini state + localStorage ga saqlash
       _persistUser(payload.user)

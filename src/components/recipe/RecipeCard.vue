@@ -3,6 +3,7 @@ import { computed }           from 'vue'
 import { useLangStore }       from '@/stores/langStore'
 import { useFavoritesStore }  from '@/stores/favoritesStore'
 import { useAuthStore }       from '@/stores/authStore'
+import { useToast }           from '@/composables/useToast'
 import { resolveImageUrl }    from '@/utils/imageUrl'
 
 const props = defineProps({
@@ -12,6 +13,7 @@ const props = defineProps({
 const lang      = useLangStore()
 const favorites = useFavoritesStore()
 const auth      = useAuthStore()
+const toast     = useToast()
 
 const title = computed(() => lang.recipeTitle(props.recipe))
 
@@ -26,7 +28,10 @@ const isFav = computed(() => favorites.isFavorited(props.recipe.id))
 function toggleFav(e) {
   e.preventDefault()
   e.stopPropagation()
-  if (!auth.isAuthenticated) return
+  if (!auth.isAuthenticated) {
+    toast.warning("Sevimlilarga qo'shish uchun tizimga kiring")
+    return
+  }
   favorites.toggle(props.recipe.id)
 }
 </script>
@@ -43,13 +48,12 @@ function toggleFav(e) {
       </span>
       <span v-if="recipe.categoryNameUz" class="badge-cat">{{ lang.catName(recipe) }}</span>
 
-      <!-- Heart button -->
+      <!-- Heart button — always visible, locked for guests -->
       <button
-        v-if="auth.isAuthenticated"
         class="fav-btn"
-        :class="{ 'fav-active': isFav }"
+        :class="{ 'fav-active': isFav, 'fav-locked': !auth.isAuthenticated }"
         @click="toggleFav"
-        :title="isFav ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish'"
+        :title="!auth.isAuthenticated ? 'Sevimlilarga qo\'shish uchun tizimga kiring' : (isFav ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish')"
       >
         <svg viewBox="0 0 24 24" :fill="isFav ? 'currentColor' : 'none'" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -136,9 +140,6 @@ function toggleFav(e) {
   font-weight: 800;
   letter-spacing: 0.03em;
 }
-.diff-easy   { background: rgba(216, 90, 48, 0.85);  color: #fff; }
-.diff-medium { background: rgba(234, 179, 8, 0.85);  color: #fff; }
-.diff-hard   { background: rgba(239, 68, 68, 0.85);  color: #fff; }
 
 .badge-cat {
   position: absolute;
@@ -182,6 +183,8 @@ function toggleFav(e) {
   background: rgba(239, 68, 68, 0.18);
 }
 .fav-btn.fav-active:hover { background: rgba(239, 68, 68, 0.28); }
+.fav-btn.fav-locked { opacity: 0.55; cursor: not-allowed; }
+.fav-btn.fav-locked:hover { background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.7); transform: none; }
 .fav-btn svg {
   width: 16px;
   height: 16px;

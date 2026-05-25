@@ -44,7 +44,7 @@ const langs = [
     <div class="nb-inner">
 
       <!-- ── Logo ── -->
-      <RouterLink to="/app" class="nb-logo" @click="menuOpen = false">
+      <RouterLink :to="auth.isAuthenticated ? '/app' : '/'" class="nb-logo" @click="menuOpen = false">
         <div class="logo-icon">🍳</div>
         <div class="logo-text">
           <span class="logo-name">OshPaz</span>

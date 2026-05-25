@@ -1,41 +1,95 @@
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import { platformApi } from '@/api/platform'
+import { useLangStore } from '@/stores/langStore'
+import { useThemeStore } from '@/stores/themeStore'
 
-const features = [
-  {
-    icon: '🍽️',
-    title: 'Minglab retseptlar',
-    desc: 'O\'zbek, rus va xalqaro oshxona retseptlari — barchasi bir joyda.',
-  },
-  {
-    icon: '📅',
-    title: 'Haftalik ovqat rejasi',
-    desc: 'Har kun nima pishirishni oldindan rejalashtiring. Sog\'lom va tartibli turmush.',
-  },
-  {
-    icon: '🛒',
-    title: 'Avtomatik xarid ro\'yxati',
-    desc: 'Reja asosida kerakli mahsulotlar ro\'yxati bir tugma bilan tayyor.',
-  },
-  {
-    icon: '🔍',
-    title: 'Aqlli qidiruv',
-    desc: 'O\'zbek, rus yoki ingliz tilida qidiring — tez va aniq natija.',
-  },
+const lang  = useLangStore()
+const theme = useThemeStore()
+
+const langFlags = [
+  { code: 'uz', flag: '🇺🇿' },
+  { code: 'ru', flag: '🇷🇺' },
+  { code: 'en', flag: '🇬🇧' },
 ]
 
-const steps = [
-  { num: '01', title: 'Ro\'yxatdan o\'ting', desc: 'Bepul akkaunt yarating, bir daqiqa vaqt oladi.' },
-  { num: '02', title: 'Retsept tanlang',    desc: 'Minglab retseptlar orasidan o\'zingizga ma\'qulini toping.' },
-  { num: '03', title: 'Reja tuzing',        desc: 'Haftalik ovqat rejangizni tuzing va xarid ro\'yxatini oling.' },
-]
+const features = computed(() => [
+  { icon: '🍽️', title: lang.t('landing.f1_title'), desc: lang.t('landing.f1_desc') },
+  { icon: '📅', title: lang.t('landing.f2_title'), desc: lang.t('landing.f2_desc') },
+  { icon: '🛒', title: lang.t('landing.f3_title'), desc: lang.t('landing.f3_desc') },
+  { icon: '🔍', title: lang.t('landing.f4_title'), desc: lang.t('landing.f4_desc') },
+])
 
-const stats = [
-  { value: '500+',  label: 'Retsept' },
-  { value: '50+',   label: 'Kategoriya' },
-  { value: '7',     label: 'Kunlik reja' },
-  { value: '100%',  label: 'Bepul' },
-]
+const steps = computed(() => [
+  { num: '01', title: lang.t('landing.s1_title'), desc: lang.t('landing.s1_desc') },
+  { num: '02', title: lang.t('landing.s2_title'), desc: lang.t('landing.s2_desc') },
+  { num: '03', title: lang.t('landing.s3_title'), desc: lang.t('landing.s3_desc') },
+])
+
+const accessLevels = computed(() => [
+  {
+    icon: '👁️',
+    badge: lang.t('landing.lv1_badge'),
+    badgeClass: 'badge-public',
+    title: lang.t('landing.lv1_title'),
+    items: [
+      lang.t('landing.lv1_i1'),
+      lang.t('landing.lv1_i2'),
+      lang.t('landing.lv1_i3'),
+      lang.t('landing.lv1_i4'),
+    ],
+    cta: null,
+  },
+  {
+    icon: '⭐',
+    badge: lang.t('landing.lv2_badge'),
+    badgeClass: 'badge-member',
+    title: lang.t('landing.lv2_title'),
+    items: [
+      lang.t('landing.lv2_i1'),
+      lang.t('landing.lv2_i2'),
+      lang.t('landing.lv2_i3'),
+      lang.t('landing.lv2_i4'),
+      lang.t('landing.lv2_i5'),
+    ],
+    cta: { label: lang.t('landing.lv2_cta'), to: '/register' },
+  },
+  {
+    icon: '✍️',
+    badge: lang.t('landing.lv3_badge'),
+    badgeClass: 'badge-blogger',
+    title: lang.t('landing.lv3_title'),
+    items: [
+      lang.t('landing.lv3_i1'),
+      lang.t('landing.lv3_i2'),
+      lang.t('landing.lv3_i3'),
+      lang.t('landing.lv3_i4'),
+    ],
+    cta: { label: lang.t('landing.lv3_cta'), to: '/register' },
+  },
+])
+
+const stats = ref([
+  { value: '...', labelKey: 'landing.stat_recipes' },
+  { value: '...', labelKey: 'landing.stat_users' },
+  { value: '...', labelKey: 'landing.stat_categories' },
+  { value: '100%', labelKey: 'landing.stat_free' },
+])
+
+onMounted(async () => {
+  try {
+    const res = await platformApi.getStats()
+    const d = res.data?.data
+    if (d) {
+      stats.value[0].value = d.totalRecipes.toLocaleString() + '+'
+      stats.value[1].value = d.totalUsers.toLocaleString() + '+'
+      stats.value[2].value = d.totalCategories.toLocaleString() + '+'
+    }
+  } catch {
+    // server javob bermasa — "..." ko'rinishida qoladi
+  }
+})
 </script>
 
 <template>
@@ -49,8 +103,33 @@ const stats = [
           <span class="logo-text">OshPaz</span>
         </div>
         <div class="nav-actions">
-          <RouterLink to="/login"    class="btn-outline">Kirish</RouterLink>
-          <RouterLink to="/register" class="btn-fill">Ro'yxatdan o'tish</RouterLink>
+          <!-- Compact flag-only lang switcher -->
+          <div class="lang-flags">
+            <button
+              v-for="l in langFlags"
+              :key="l.code"
+              class="lang-flag-btn"
+              :class="{ 'flag-active': lang.lang === l.code }"
+              @click="lang.setLang(l.code)"
+            >{{ l.flag }}</button>
+          </div>
+
+          <!-- Theme toggle -->
+          <button class="theme-btn" @click="theme.toggle()" :title="theme.isDark ? 'Kunduzgi rejim' : 'Tungi rejim'">
+            <svg v-if="theme.isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+            </svg>
+          </button>
+
+          <RouterLink to="/login"    class="btn-outline">{{ lang.t('landing.login') }}</RouterLink>
+          <RouterLink to="/register" class="btn-fill">{{ lang.t('landing.register') }}</RouterLink>
         </div>
       </div>
     </nav>
@@ -62,34 +141,31 @@ const stats = [
       <div class="hero-glow hero-glow-3"></div>
 
       <div class="hero-inner">
-        <span class="hero-badge">🇺🇿 O'zbek oshxonasi va undan ham ko'p</span>
+        <span class="hero-badge">{{ lang.t('landing.badge') }}</span>
 
         <h1 class="hero-title">
-          Har kuni yangi<br>
-          <span class="gradient-text">mazali ovqat</span>
+          {{ lang.t('landing.hero_title_1') }}<br>
+          <span class="gradient-text">{{ lang.t('landing.hero_title_2') }}</span>
         </h1>
 
-        <p class="hero-sub">
-          Retseptlar, haftalik reja va xarid ro'yxati — hammasi bir tizimda.
-          Oilangiz uchun pishirish endi oson va qiziqarli.
-        </p>
+        <p class="hero-sub">{{ lang.t('landing.hero_sub') }}</p>
 
         <div class="hero-btns">
-          <RouterLink to="/register" class="btn-hero-primary">
-            Bepul boshlash
+          <RouterLink to="/app/recipes" class="btn-hero-primary">
+            {{ lang.t('landing.btn_browse') }}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
             </svg>
           </RouterLink>
-          <RouterLink to="/login" class="btn-hero-ghost">
-            Tizimga kirish
+          <RouterLink to="/register" class="btn-hero-ghost">
+            {{ lang.t('landing.btn_register') }}
           </RouterLink>
         </div>
 
         <div class="hero-stats">
-          <div v-for="s in stats" :key="s.label" class="hero-stat">
+          <div v-for="s in stats" :key="s.labelKey" class="hero-stat">
             <span class="hero-stat-val">{{ s.value }}</span>
-            <span class="hero-stat-lbl">{{ s.label }}</span>
+            <span class="hero-stat-lbl">{{ lang.t(s.labelKey) }}</span>
           </div>
         </div>
       </div>
@@ -142,9 +218,9 @@ const stats = [
     <!-- ── Features ───────────────────────────────────────────── -->
     <section class="section features-section">
       <div class="section-inner">
-        <div class="section-label">Imkoniyatlar</div>
-        <h2 class="section-title">Nima uchun OshPaz?</h2>
-        <p class="section-sub">Bitta platforma — barcha ovqat ehtiyojlaringiz uchun</p>
+        <div class="section-label">{{ lang.t('landing.features_label') }}</div>
+        <h2 class="section-title">{{ lang.t('landing.features_title') }}</h2>
+        <p class="section-sub">{{ lang.t('landing.features_sub') }}</p>
 
         <div class="features-grid">
           <div v-for="f in features" :key="f.title" class="feature-card">
@@ -156,11 +232,38 @@ const stats = [
       </div>
     </section>
 
+    <!-- ── Kim nima qila oladi ──────────────────────────────── -->
+    <section class="section access-section">
+      <div class="section-inner">
+        <div class="section-label">{{ lang.t('landing.access_label') }}</div>
+        <h2 class="section-title">{{ lang.t('landing.access_title') }}</h2>
+        <p class="section-sub">{{ lang.t('landing.access_sub') }}</p>
+
+        <div class="access-grid">
+          <div v-for="level in accessLevels" :key="level.badge" class="access-card">
+            <div class="access-top">
+              <span class="access-icon">{{ level.icon }}</span>
+              <span class="access-badge" :class="level.badgeClass">{{ level.badge }}</span>
+            </div>
+            <h3 class="access-title">{{ level.title }}</h3>
+            <ul class="access-list">
+              <li v-for="item in level.items" :key="item">
+                <span class="access-check">✓</span>{{ item }}
+              </li>
+            </ul>
+            <RouterLink v-if="level.cta" :to="level.cta.to" class="access-btn">
+              {{ level.cta.label }}
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── How it works ───────────────────────────────────────── -->
     <section class="section steps-section">
       <div class="section-inner">
-        <div class="section-label">Qanday ishlaydi</div>
-        <h2 class="section-title">3 qadamda boshlang</h2>
+        <div class="section-label">{{ lang.t('landing.steps_label') }}</div>
+        <h2 class="section-title">{{ lang.t('landing.steps_title') }}</h2>
 
         <div class="steps-row">
           <div v-for="(s, i) in steps" :key="s.num" class="step-card">
@@ -177,16 +280,16 @@ const stats = [
     <section class="cta-section">
       <div class="cta-glow"></div>
       <div class="cta-inner">
-        <h2 class="cta-title">Bugun boshlaymizmi?</h2>
-        <p class="cta-sub">Ro'yxatdan o'tish bepul va atigi bir daqiqa vaqt oladi.</p>
+        <h2 class="cta-title">{{ lang.t('landing.cta_title') }}</h2>
+        <p class="cta-sub">{{ lang.t('landing.cta_sub') }}</p>
         <div class="cta-btns">
           <RouterLink to="/register" class="btn-hero-primary">
-            Hoziroq boshlash
+            {{ lang.t('landing.cta_start') }}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
             </svg>
           </RouterLink>
-          <RouterLink to="/login" class="btn-hero-ghost">Kirish</RouterLink>
+          <RouterLink to="/login" class="btn-hero-ghost">{{ lang.t('landing.login') }}</RouterLink>
         </div>
       </div>
     </section>
@@ -198,7 +301,7 @@ const stats = [
           <span class="logo-icon">👨‍🍳</span>
           <span class="logo-text">OshPaz</span>
         </div>
-        <p class="footer-copy">© {{ new Date().getFullYear() }} OshPaz. Barcha huquqlar himoyalangan.</p>
+        <p class="footer-copy">© {{ new Date().getFullYear() }} OshPaz. {{ lang.t('landing.footer_rights') }}</p>
       </div>
     </footer>
 
@@ -247,6 +350,8 @@ const stats = [
 .nav-actions { display: flex; align-items: center; gap: 12px; }
 .btn-outline {
   padding: 8px 20px;
+  width: 96px;
+  text-align: center;
   border: 1.5px solid var(--bd-xl);
   border-radius: 10px;
   color: var(--tx-3);
@@ -254,10 +359,14 @@ const stats = [
   font-weight: 700;
   text-decoration: none;
   transition: border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .btn-outline:hover { border-color: rgba(216, 90, 48, 0.5); color: #E8713E; }
 .btn-fill {
   padding: 8px 20px;
+  width: 200px;
+  text-align: center;
   background: linear-gradient(135deg, #D85A30, #E8713E);
   border-radius: 10px;
   color: white;
@@ -266,8 +375,52 @@ const stats = [
   text-decoration: none;
   box-shadow: 0 4px 12px rgba(216, 90, 48, 0.3);
   transition: transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .btn-fill:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(216, 90, 48, 0.45); }
+
+/* ── Theme toggle ── */
+.theme-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md);
+  color: var(--tx-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.theme-btn:hover { background: var(--bd-md); color: var(--tx-1); }
+.theme-btn svg { width: 16px; height: 16px; }
+
+/* ── Lang flags ── */
+.lang-flags {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.lang-flag-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s;
+}
+.lang-flag-btn:hover { opacity: 0.8; background: var(--bd); }
+.lang-flag-btn.flag-active { opacity: 1; background: rgba(216, 90, 48, 0.12); }
 
 /* ── Hero ── */
 .hero {
@@ -300,6 +453,8 @@ const stats = [
 .hero-badge {
   display: inline-block;
   padding: 6px 14px;
+  min-width: 280px;
+  text-align: center;
   background: rgba(216, 90, 48, 0.12);
   border: 1px solid rgba(216, 90, 48, 0.25);
   border-radius: 100px;
@@ -307,6 +462,7 @@ const stats = [
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 24px;
+  white-space: nowrap;
 }
 .hero-title {
   font-size: 56px;
@@ -496,6 +652,57 @@ const stats = [
 .feature-title { font-size: 16px; font-weight: 800; color: var(--tx-2); margin-bottom: 10px; }
 .feature-desc { font-size: 14px; color: var(--tx-4); line-height: 1.6; }
 
+/* ── Access levels ── */
+.access-section { background: var(--bg-base); }
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.access-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  border-radius: 20px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.access-card:hover { border-color: rgba(216, 90, 48, 0.3); transform: translateY(-3px); }
+.access-top { display: flex; align-items: center; gap: 12px; }
+.access-icon { font-size: 28px; line-height: 1; }
+.access-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.badge-public  { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.badge-member  { background: rgba(16,185,129,0.15);  color: #34d399; }
+.badge-blogger { background: rgba(216,90,48,0.15);   color: #E8713E; }
+.access-title { font-size: 17px; font-weight: 800; color: var(--tx-2); }
+.access-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.access-list li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--tx-4); line-height: 1.5; }
+.access-check { color: #10b981; font-weight: 900; font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+.access-btn {
+  display: block;
+  text-align: center;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.2s, transform 0.2s;
+  margin-top: auto;
+}
+.access-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
 /* ── Steps ── */
 .steps-row {
   display: flex;
@@ -585,6 +792,7 @@ const stats = [
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .access-grid { grid-template-columns: 1fr; }
   .hero { flex-direction: column; padding: 60px 24px; min-height: auto; gap: 48px; }
   .hero-inner { max-width: 100%; }
   .hero-visual { display: none; }

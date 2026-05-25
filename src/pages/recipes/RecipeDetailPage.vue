@@ -5,6 +5,7 @@ import { useAuthStore }                    from '@/stores/authStore'
 import { useLangStore }                    from '@/stores/langStore'
 import { useUnitsStore }                   from '@/stores/unitsStore'
 import { useFavoritesStore }               from '@/stores/favoritesStore'
+import { useToast }                        from '@/composables/useToast'
 import { recipesApi }                      from '@/api/recipes'
 import { ratingsApi }                      from '@/api/ratings'
 import { commentsApi }                     from '@/api/comments'
@@ -17,6 +18,11 @@ const auth      = useAuthStore()
 const lang      = useLangStore()
 const units     = useUnitsStore()
 const favorites = useFavoritesStore()
+const toast     = useToast()
+
+function requireAuth(msg) {
+  toast.warning(msg)
+}
 
 const recipe  = ref(null)
 const loading = ref(true)
@@ -65,7 +71,10 @@ const isFaved = computed(() =>
 )
 
 async function toggleFav() {
-  if (!auth.isAuthenticated) { router.push('/login'); return }
+  if (!auth.isAuthenticated) {
+    requireAuth("Sevimlilarga qo'shish uchun tizimga kiring")
+    return
+  }
   if (favLoading.value) return
   favLoading.value = true
   try {
@@ -95,7 +104,7 @@ async function loadRating(recipeId) {
 }
 
 async function submitRating(score) {
-  if (!auth.isAuthenticated) { router.push('/login'); return }
+  if (!auth.isAuthenticated) { requireAuth('Reyting berish uchun tizimga kiring'); return }
   if (ratingLoading.value) return
   ratingLoading.value = true
   try {
@@ -145,7 +154,7 @@ async function loadComments(reset = false) {
 }
 
 async function submitComment() {
-  if (!auth.isAuthenticated) { router.push('/login'); return }
+  if (!auth.isAuthenticated) { requireAuth('Izoh qoldirish uchun tizimga kiring'); return }
   const text = newComment.value.trim()
   if (!text) return
   submitting.value = true
@@ -171,8 +180,17 @@ async function deleteComment(commentId) {
   } catch { /* ignore */ }
 }
 
+const LOCKED_TABS = ['steps', 'nutrition', 'comments']
+
+function onTabClick(key) {
+  if (!auth.isAuthenticated && LOCKED_TABS.includes(key)) {
+    toast.warning('Bu qismni ko\'rish uchun tizimga kiring')
+  }
+  tab.value = key
+}
+
 watch(tab, (newTab) => {
-  if (newTab === 'comments' && comments.value.length === 0) {
+  if (newTab === 'comments' && auth.isAuthenticated && comments.value.length === 0) {
     loadComments(true)
   }
 })
@@ -233,11 +251,12 @@ onMounted(async () => {
       <!-- Favorite button -->
       <button
         class="fav-btn"
-        :class="{ 'fav-active': isFaved, 'fav-loading': favLoading }"
+        :class="{ 'fav-active': isFaved, 'fav-loading': favLoading, 'fav-locked': !auth.isAuthenticated }"
         @click="toggleFav"
-        :title="isFaved ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish'"
+        :title="!auth.isAuthenticated ? 'Sevimlilarga qo\'shish uchun tizimga kiring' : (isFaved ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish')"
       >
-        <svg viewBox="0 0 24 24" :fill="isFaved ? 'currentColor' : 'none'" stroke="currentColor">
+        <span v-if="!auth.isAuthenticated" class="fav-lock">🔒</span>
+        <svg v-else viewBox="0 0 24 24" :fill="isFaved ? 'currentColor' : 'none'" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
         </svg>
@@ -248,27 +267,29 @@ onMounted(async () => {
     <div class="title-block">
       <h1 class="recipe-title">{{ lang.recipeTitle(recipe) }}</h1>
 
-      <!-- Interactive star rating -->
+      <!-- Star rating -->
       <div class="star-row">
-        <div class="stars">
+        <div class="stars" :class="{ 'stars-locked': !auth.isAuthenticated }">
           <button
             v-for="s in 5"
             :key="s"
             class="star-btn"
             :class="{
-              'star-filled': s <= (hoverScore || myScore),
-              'star-hover':  s <= hoverScore && s > myScore
+              'star-filled': s <= (hoverScore || myScore || (auth.isAuthenticated ? 0 : Math.round(avgRating))),
+              'star-hover':  auth.isAuthenticated && s <= hoverScore && s > myScore
             }"
-            @mouseenter="hoverScore = s"
-            @mouseleave="hoverScore = 0"
+            @mouseenter="auth.isAuthenticated && (hoverScore = s)"
+            @mouseleave="auth.isAuthenticated && (hoverScore = 0)"
             @click="submitRating(s)"
             :disabled="ratingLoading"
+            :title="auth.isAuthenticated ? '' : 'Reyting berish uchun tizimga kiring'"
           >★</button>
         </div>
         <span class="star-meta">
           <span v-if="avgRating > 0" class="star-avg">{{ avgRating.toFixed(1) }}</span>
           <span v-if="ratingCount > 0" class="star-count">({{ ratingCount }})</span>
-          <span v-if="myScore > 0" class="star-mine">· Sizning bahoyingiz: {{ myScore }}⭐</span>
+          <span v-if="myScore > 0 && auth.isAuthenticated" class="star-mine">· Sizning bahoyingiz: {{ myScore }}⭐</span>
+          <span v-if="!auth.isAuthenticated" class="star-locked-hint">· 🔒 Reyting berish uchun kiring</span>
         </span>
       </div>
 
@@ -341,13 +362,17 @@ onMounted(async () => {
           { key: 'comments',    icon: '💬', label: 'Izohlar'                    },
         ]"
         :key="t.key"
-        @click="tab = t.key"
+        @click="onTabClick(t.key)"
         class="tab-btn"
-        :class="{ 'tab-active': tab === t.key }"
+        :class="{
+          'tab-active': tab === t.key,
+          'tab-locked': !auth.isAuthenticated && LOCKED_TABS.includes(t.key)
+        }"
       >
         <span>{{ t.icon }}</span>
         <span>{{ t.label }}</span>
-        <span v-if="t.key === 'comments' && commentsTotal > 0" class="tab-badge">{{ commentsTotal }}</span>
+        <span v-if="!auth.isAuthenticated && LOCKED_TABS.includes(t.key)" class="tab-lock">🔒</span>
+        <span v-else-if="t.key === 'comments' && commentsTotal > 0" class="tab-badge">{{ commentsTotal }}</span>
       </button>
     </div>
 
@@ -366,8 +391,19 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- ─── Locked panel (guest) ─── -->
+    <div v-if="!auth.isAuthenticated && LOCKED_TABS.includes(tab)" class="tab-content locked-panel">
+      <div class="lp-icon">🔒</div>
+      <h3 class="lp-title">Tizimga kiring</h3>
+      <p class="lp-desc">Pishirish bosqichlari, ozuqa ma'lumotlari va izohlarni ko'rish uchun ro'yxatdan o'ting</p>
+      <div class="lp-btns">
+        <RouterLink to="/login"    class="lp-btn-primary">Kirish</RouterLink>
+        <RouterLink to="/register" class="lp-btn-ghost">Bepul ro'yxatdan o'tish</RouterLink>
+      </div>
+    </div>
+
     <!-- ─── Steps ─── -->
-    <div v-if="tab === 'steps'" class="tab-content">
+    <div v-if="tab === 'steps' && auth.isAuthenticated" class="tab-content">
       <div v-if="recipe.steps?.length" class="steps-list">
         <div v-for="step in recipe.steps" :key="step.id" class="step-item">
           <div class="step-num">{{ step.stepNumber }}</div>
@@ -385,7 +421,7 @@ onMounted(async () => {
     </div>
 
     <!-- ─── Nutrition ─── -->
-    <div v-if="tab === 'nutrition'" class="tab-content">
+    <div v-if="tab === 'nutrition' && auth.isAuthenticated" class="tab-content">
       <div v-if="recipe.nutritionalInfo" class="nutrition-grid">
         <div v-for="n in [
             { icon: '🔥', label: lang.t('nutrition.calories'), val: recipe.nutritionalInfo.caloriesPerServing, unit: 'kcal' },
@@ -410,36 +446,33 @@ onMounted(async () => {
     </div>
 
     <!-- ─── Comments ─── -->
-    <div v-if="tab === 'comments'" class="tab-content comments-section">
+    <div v-if="tab === 'comments' && auth.isAuthenticated" class="tab-content comments-section">
 
       <!-- Add comment -->
-      <div v-if="auth.isAuthenticated" class="comment-form">
-        <div class="cf-avatar">{{ auth.initials || '?' }}</div>
-        <div class="cf-input-wrap">
+      <div class="comment-form" :class="{ 'comment-form--locked': !auth.isAuthenticated }">
+        <div class="cf-avatar">{{ auth.isAuthenticated ? (auth.initials || '?') : '🔒' }}</div>
+        <div class="cf-input-wrap" @click.capture="!auth.isAuthenticated && requireAuth('Izoh qoldirish uchun tizimga kiring')">
           <textarea
             v-model="newComment"
             class="cf-textarea"
-            placeholder="Izohingizni yozing..."
+            :placeholder="auth.isAuthenticated ? 'Izohingizni yozing...' : 'Izoh qoldirish uchun tizimga kiring...'"
+            :disabled="!auth.isAuthenticated"
             rows="2"
             maxlength="2000"
             @keydown.ctrl.enter="submitComment"
           />
           <div class="cf-actions">
-            <span class="cf-hint">Ctrl+Enter — yuborish</span>
+            <span v-if="auth.isAuthenticated" class="cf-hint">Ctrl+Enter — yuborish</span>
             <button
               class="cf-submit"
-              :disabled="!newComment.trim() || submitting"
+              :disabled="auth.isAuthenticated ? (!newComment.trim() || submitting) : false"
               @click="submitComment"
             >
               <span v-if="submitting" class="act-spinner" />
-              <span v-else>Yuborish</span>
+              <span v-else>{{ auth.isAuthenticated ? 'Yuborish' : '🔒 Kirish' }}</span>
             </button>
           </div>
         </div>
-      </div>
-      <div v-else class="comment-login-hint">
-        <span>Izoh qoldirish uchun </span>
-        <RouterLink to="/login" class="cl-link">tizimga kiring</RouterLink>
       </div>
 
       <!-- Comments list -->
@@ -595,6 +628,8 @@ onMounted(async () => {
 .fav-btn svg { width: 22px; height: 22px; }
 .fav-btn:hover { background: rgba(216,90,48,0.7); transform: scale(1.1); }
 .fav-active { color: #ef4444 !important; background: rgba(239,68,68,0.2) !important; }
+.fav-locked { opacity: 0.6; cursor: not-allowed; }
+.fav-lock   { font-size: 16px; line-height: 1; }
 .fav-loading { opacity: 0.6; pointer-events: none; }
 
 /* ── Title block ── */
@@ -638,7 +673,9 @@ onMounted(async () => {
 .star-meta   { display: flex; align-items: center; gap: 5px; font-size: 13px; }
 .star-avg    { font-weight: 800; color: var(--tx-2); }
 .star-count  { color: var(--tx-5); }
-.star-mine   { color: #E8713E; font-weight: 600; }
+.star-mine        { color: #E8713E; font-weight: 600; }
+.stars-locked .star-btn { cursor: not-allowed; opacity: 0.5; }
+.star-locked-hint { color: var(--tx-5); font-size: 13px; }
 
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
@@ -734,6 +771,45 @@ onMounted(async () => {
   border: 1px solid rgba(216,90,48,0.25);
   color: #E8713E;
 }
+.tab-locked { opacity: 0.6; }
+.tab-lock   { font-size: 11px; }
+
+.locked-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px;
+  gap: 16px;
+}
+.lp-icon  { font-size: 48px; line-height: 1; }
+.lp-title { font-size: 20px; font-weight: 800; color: var(--tx-1); margin: 0; }
+.lp-desc  { font-size: 14px; color: var(--tx-4); max-width: 380px; line-height: 1.6; margin: 0; }
+.lp-btns  { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.lp-btn-primary {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.lp-btn-primary:hover { opacity: 0.88; }
+.lp-btn-ghost {
+  padding: 10px 24px;
+  border: 1.5px solid var(--bd-xl);
+  border-radius: 12px;
+  color: var(--tx-3);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+.lp-btn-ghost:hover { border-color: rgba(216,90,48,0.4); color: #E8713E; }
+
 .tab-badge {
   background: #E8713E;
   color: #fff;
@@ -931,6 +1007,15 @@ onMounted(async () => {
 }
 .cf-submit:disabled { opacity: 0.4; cursor: not-allowed; }
 .cf-submit:not(:disabled):hover { opacity: 0.85; transform: translateY(-1px); }
+
+.comment-form--locked .cf-textarea {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.comment-form--locked .cf-avatar {
+  opacity: 0.6;
+  filter: grayscale(1);
+}
 
 .comment-login-hint {
   text-align: center;

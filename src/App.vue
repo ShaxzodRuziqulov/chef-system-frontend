@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { onMounted }      from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useUnitsStore }  from '@/stores/unitsStore'
 import { useThemeStore }  from '@/stores/themeStore'
+import { useToast }       from '@/composables/useToast'
 import ToastContainer     from '@/components/ui/ToastContainer.vue'
 
-// Mavzuni ilk boshlanishda qo'llaydi (localStorage dan o'qib data-theme ni o'rnatadi)
 useThemeStore()
 
-// O'lchov birliklarini bir marta yuklaydi (cached)
-onMounted(() => useUnitsStore().load())
+const toast = useToast()
+
+function onForbidden() {
+  toast.error('Bu amalni bajarish uchun sizda yetarli huquq yo\'q')
+}
+
+onMounted(() => {
+  useUnitsStore().load()
+  window.addEventListener('api:forbidden', onForbidden)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('api:forbidden', onForbidden)
+})
 </script>
 
 <template>

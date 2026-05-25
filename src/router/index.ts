@@ -17,7 +17,7 @@ const routes: RouteRecordRaw[] = [
     path:      '/',
     name:      'Landing',
     component: () => import('@/pages/LandingPage.vue'),
-    meta:      { guestOnly: true, title: 'OshPaz — Ovqatlar dunyosi' },
+    meta:      { title: 'OshPaz — Ovqatlar dunyosi' },
   },
 
   // ── Auth ────────────────────────────────────────────────────────
@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
     name:      'Register',
     component: () => import('@/pages/auth/RegisterPage.vue'),
     meta:      { guestOnly: true, title: "Ro'yxatdan o'tish" },
+  },
+  {
+    path:      '/reset-password',
+    name:      'ResetPassword',
+    component: () => import('@/pages/auth/ResetPasswordPage.vue'),
+    meta:      { title: 'Parolni tiklash' },
   },
 
   // ── Asosiy sahifalar (MainLayout ichida) ────────────────────────
@@ -49,13 +55,13 @@ const routes: RouteRecordRaw[] = [
         path:      'recipes',
         name:      'Recipes',
         component: () => import('@/pages/recipes/RecipesPage.vue'),
-        meta:      { requiresAuth: true, title: 'Retseptlar' },
+        meta:      { title: 'Retseptlar' },
       },
       {
         path:      'recipes/:id',
         name:      'RecipeDetail',
         component: () => import('@/pages/recipes/RecipeDetailPage.vue'),
-        meta:      { requiresAuth: true, title: 'Retsept' },
+        meta:      { title: 'Retsept' },
       },
       {
         path:         'meal-plans',

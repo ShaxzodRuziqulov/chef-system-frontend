@@ -142,7 +142,7 @@ async function saveProfile() {
 async function savePassword() {
   pwError.value = ''; pwSuccess.value = false
   if (pwForm.value.newPassword !== pwForm.value.confirmPassword) { pwError.value = lang.t('profile.pw_mismatch'); return }
-  if (pwForm.value.newPassword.length < 6) { pwError.value = lang.t('profile.pw_short'); return }
+  if (pwForm.value.newPassword.length < 4) { pwError.value = lang.t('profile.pw_short'); return }
   pwSaving.value = true
   try {
     await authApi.changePassword({ currentPassword: pwForm.value.currentPassword, newPassword: pwForm.value.newPassword })

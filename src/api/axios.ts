@@ -147,7 +147,7 @@ api.interceptors.response.use(
 
     // ── 403 Forbidden ──────────────────────────────────────────
     if (error.response?.status === 403) {
-      console.warn('[API] 403 Forbidden:', originalRequest.url)
+      window.dispatchEvent(new CustomEvent('api:forbidden'))
     }
 
     // ── 404 Not Found ──────────────────────────────────────────

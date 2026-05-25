@@ -3,12 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useForm, useField }        from 'vee-validate'
 import * as yup                     from 'yup'
 import { useAuthStore }             from '@/stores/authStore'
-import { useRoute }                 from 'vue-router'
+import { useRoute, useRouter }      from 'vue-router'
 import { useLangStore }             from '@/stores/langStore'
 
-const auth  = useAuthStore()
-const route = useRoute()
-const lang  = useLangStore()
+const auth   = useAuthStore()
+const route  = useRoute()
+const router = useRouter()
+const lang   = useLangStore()
 
 const redirectPath = computed(() =>
   typeof route.query.redirect === 'string' ? route.query.redirect : '/'
@@ -51,6 +52,16 @@ onMounted(() => { auth.clearError(); serverError.value = null })
 
     <!-- Card -->
     <div class="card">
+      <!-- Top row: back + lang -->
+      <div class="card-lang">
+        <button class="back-btn" @click="router.push('/')" :title="lang.t('common.back') || 'Orqaga'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 12H5m7-7l-7 7 7 7"/>
+          </svg>
+          <span>{{ lang.t('common.back') || 'Orqaga' }}</span>
+        </button>
+      </div>
+
       <!-- Logo -->
       <div class="logo-wrap">
         <div class="logo-icon">🍳</div>
@@ -182,6 +193,30 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Top row ── */
+.card-lang {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md);
+  color: var(--tx-4);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+.back-btn:hover { color: #E8713E; background: var(--bd); }
+.back-btn svg { width: 15px; height: 15px; }
 
 /* ── Logo ── */
 .logo-wrap {
