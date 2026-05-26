@@ -203,6 +203,10 @@ export const useAuthStore = defineStore('auth', () => {
       // Foydalanuvchi ma'lumotlarini state + localStorage ga saqlash
       _persistUser(payload.user)
 
+      // Login bo'lganda default kun rejimini o'rnatish
+      localStorage.removeItem('oshpaz_theme')
+      document.documentElement.setAttribute('data-theme', 'light')
+
       // Login muvaffaqiyatli — redirect yoki Home (dashboard) ga yo'naltirish
       await router.push(redirectTo && redirectTo !== '/' ? redirectTo : { name: 'Home' })
       return null

@@ -26,6 +26,6 @@ export const usersApi = {
     api.post('/users/become-blogger', { termsAccepted: true }),
 
   /** Oshpaz statusidan chiqib USER ga qaytish */
-  leaveOshpaz: (id: string | number) =>
-    api.put(`/users/${id}`, { role: 'USER' }),
+  leaveOshpaz: () =>
+    api.post('/users/leave-blogger'),
 }

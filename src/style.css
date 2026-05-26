@@ -16,28 +16,7 @@
 }
 
 /* ── CSS Theme Variables ── */
-:root, [data-theme="dark"] {
-  --bg-base:    #0f172a;
-  --bg-surface: #0d1526;
-  --bg-card:    rgba(255,255,255,0.03);
-  --bg-card-md: rgba(255,255,255,0.04);
-  --bg-card-lg: rgba(255,255,255,0.05);
-  --bg-input:   rgba(255,255,255,0.05);
-  --bg-input-f: rgba(255,255,255,0.08);
-  --bd:         rgba(255,255,255,0.06);
-  --bd-md:      rgba(255,255,255,0.08);
-  --bd-lg:      rgba(255,255,255,0.10);
-  --bd-xl:      rgba(255,255,255,0.12);
-  --tx-1:       #f1f5f9;
-  --tx-2:       #e2e8f0;
-  --tx-3:       #94a3b8;
-  --tx-4:       #64748b;
-  --tx-5:       #475569;
-  --tx-6:       #334155;
-  --color-scheme: dark;
-}
-
-[data-theme="light"] {
+:root, [data-theme="light"] {
   --bg-base:    #f0f4f8;
   --bg-surface: #ffffff;
   --bg-card:    #ffffff;
@@ -56,6 +35,27 @@
   --tx-5:       #64748b;
   --tx-6:       #94a3b8;
   --color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg-base:    #0f172a;
+  --bg-surface: #0d1526;
+  --bg-card:    rgba(255,255,255,0.03);
+  --bg-card-md: rgba(255,255,255,0.04);
+  --bg-card-lg: rgba(255,255,255,0.05);
+  --bg-input:   rgba(255,255,255,0.05);
+  --bg-input-f: rgba(255,255,255,0.08);
+  --bd:         rgba(255,255,255,0.06);
+  --bd-md:      rgba(255,255,255,0.08);
+  --bd-lg:      rgba(255,255,255,0.10);
+  --bd-xl:      rgba(255,255,255,0.12);
+  --tx-1:       #f1f5f9;
+  --tx-2:       #e2e8f0;
+  --tx-3:       #94a3b8;
+  --tx-4:       #64748b;
+  --tx-5:       #475569;
+  --tx-6:       #334155;
+  --color-scheme: dark;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

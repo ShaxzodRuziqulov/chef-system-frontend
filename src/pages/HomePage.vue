@@ -1,25 +1,74 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { recipesApi    } from '@/api/recipes'
-import { categoriesApi } from '@/api/categories'
-import { favoritesApi  } from '@/api/favorites'
-import RecipeCard        from '@/components/recipe/RecipeCard.vue'
-import RecipeFormModal   from '@/components/recipe/RecipeFormModal.vue'
-import { useLangStore }  from '@/stores/langStore'
-import { useAuthStore }  from '@/stores/authStore'
+import { recipesApi        } from '@/api/recipes'
+import { favoritesApi      } from '@/api/favorites'
+import { mealPlansApi      } from '@/api/mealPlans'
+import RecipeCard            from '@/components/recipe/RecipeCard.vue'
+import RecipeFormModal       from '@/components/recipe/RecipeFormModal.vue'
+import { useLangStore }      from '@/stores/langStore'
+import { useAuthStore }      from '@/stores/authStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 
 const lang      = useLangStore()
 const auth      = useAuthStore()
 const favorites = useFavoritesStore()
 
-// ── Data ──────────────────────────────────────────────────────────
-const popular        = ref([])
-const favRecipes     = ref([])
-const myRecipes      = ref([])
-const categories     = ref([])
-const myRecipeCount  = ref(0)
-const loading        = ref(true)
+// ── State ─────────────────────────────────────────────────────────
+const popular       = ref([])
+const favRecipes    = ref([])
+const myRecipes     = ref([])
+const myRecipeCount = ref(0)
+const todayMeals    = ref([])
+const loading       = ref(true)
+
+// ── Meal plan helpers ─────────────────────────────────────────────
+// JS: 0=Yak…6=Sha → backend: 1=Du…7=Yak
+const todayDow = new Date().getDay() || 7   // 0 → 7 (Yakshanba)
+
+const DAY_NAMES  = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY']
+const MEAL_ORDER = ['BREAKFAST','LUNCH','DINNER','SNACK']
+const MEAL_LABELS = {
+  BREAKFAST: { uz: 'Nonushta',     icon: '🌅' },
+  LUNCH:     { uz: 'Tushlik',      icon: '☀️'  },
+  DINNER:    { uz: 'Kechki ovqat', icon: '🌙'  },
+  SNACK:     { uz: 'Gazak',        icon: '🍎'  },
+}
+
+// backend dayOfWeek: number(1-7) yoki string('MONDAY'…) — ikkalasini qabul qilish
+const normDay = (d) =>
+  typeof d === 'number' ? d : DAY_NAMES.indexOf(d) + 1
+
+const todayMealsSorted = computed(() =>
+  [...todayMeals.value].sort(
+    (a, b) => MEAL_ORDER.indexOf(a.mealType) - MEAL_ORDER.indexOf(b.mealType)
+  )
+)
+
+// ── Sana (Uzbekcha) ───────────────────────────────────────────────
+const UZ_DAYS   = ['Yakshanba','Dushanba','Seshanba','Chorshanba','Payshanba','Juma','Shanba']
+const UZ_MONTHS = ['yanvar','fevral','mart','aprel','may','iyun','iyul','avgust','sentabr','oktabr','noyabr','dekabr']
+const todayDateStr = computed(() => {
+  const d = new Date()
+  return `${UZ_DAYS[d.getDay()]}, ${d.getDate()} ${UZ_MONTHS[d.getMonth()]}`
+})
+
+// ── Greeting ──────────────────────────────────────────────────────
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  if (h < 6)  return lang.t('home.greet_night')
+  if (h < 12) return lang.t('home.greet_morning')
+  if (h < 18) return lang.t('home.greet_day')
+  return lang.t('home.greet_evening')
+})
+
+const roleBadge = computed(() => {
+  if (auth.isAdmin)   return { label: 'Admin',  cls: 'role-admin'   }
+  if (auth.isBlogger) return { label: 'Oshpaz', cls: 'role-blogger' }
+  return null
+})
+
+// Saqlangan retseptlar preview — template ichida .slice() bo'lmasin
+const favPreview = computed(() => favRecipes.value.slice(0, 4))
 
 // ── Recipe Modal ──────────────────────────────────────────────────
 const showRecipeModal = ref(false)
@@ -32,88 +81,50 @@ function openCreateRecipe() {
 
 async function handleRecipeSaved() {
   showRecipeModal.value = false
-  // Mening retseptlarim ro'yxatini yangilash
-  if (auth.isBlogger) {
-    const res = await recipesApi.getMy({ page: 0, size: 8 })
-    const d = res.data?.data ?? res.data
-    myRecipes.value     = d?.content      ?? []
-    myRecipeCount.value = d?.totalElements ?? 0
-  }
+  if (!auth.isBlogger) return
+  const res = await recipesApi.getMy({ page: 0, size: 8 })
+  const d   = res.data?.data ?? res.data
+  myRecipes.value     = d?.content      ?? []
+  myRecipeCount.value = d?.totalElements ?? 0
 }
 
-// ── Greeting ──────────────────────────────────────────────────────
-const hour = new Date().getHours()
-const greeting = computed(() => {
-  if (hour < 6)  return lang.t('home.greet_night')
-  if (hour < 12) return lang.t('home.greet_morning')
-  if (hour < 18) return lang.t('home.greet_day')
-  return lang.t('home.greet_evening')
-})
-
-const roleBadge = computed(() => {
-  if (auth.isAdmin)   return { label: 'Admin',  cls: 'role-admin' }
-  if (auth.isBlogger) return { label: 'Oshpaz', cls: 'role-blogger' }
-  return null
-})
-
-// ── Category icon map ─────────────────────────────────────────────
-const CAT_ICONS = [
-  { keys: ['milliy', 'national', 'узбек'],          icon: '🏺' },
-  { keys: ["sho'rva", 'shorva', 'soup', 'суп'],     icon: '🍜' },
-  { keys: ['salat', 'salad', 'салат'],              icon: '🥗' },
-  { keys: ['pishiriq', 'выпечк', 'baking', 'non'],  icon: '🥐' },
-  { keys: ['shirin', 'desert', 'десерт'],           icon: '🍰' },
-  { keys: ["go'sht", 'мясо', 'meat', 'kabob'],      icon: '🥩' },
-  { keys: ['sabzavot', 'овощ', 'vegetable'],        icon: '🥦' },
-  { keys: ['baliq', 'рыба', 'fish'],                icon: '🐟' },
-  { keys: ['ichimlik', 'напиток', 'drink'],         icon: '🥤' },
-  { keys: ['tez', 'fast', 'быстр', 'snack'],        icon: '⚡' },
-]
-function catIcon(cat) {
-  const name = ((cat.nameUz || '') + ' ' + (cat.nameRu || '') + ' ' + (cat.nameEng || '')).toLowerCase()
-  for (const entry of CAT_ICONS) {
-    if (entry.keys.some(k => name.includes(k))) return entry.icon
-  }
-  return '🍽️'
-}
+// ── Data parsing helper ───────────────────────────────────────────
+const unwrap = (res) => res.data?.data ?? res.data
 
 // ── Load ──────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
-    const calls = [
+    // Har bir so'rov nomli — indeks mo'rtligi yo'q
+    const [popRes, favRes, planRes, myRes] = await Promise.allSettled([
       recipesApi.getAll({ page: 0, size: 8, sort: ['averageRating,desc', 'viewCount,desc'] }),
-      categoriesApi.getAll(),
-    ]
-    if (auth.isAuthenticated) {
-      calls.push(favoritesApi.getAll({ page: 0, size: 8 }))
-      if (auth.isBlogger) {
-        calls.push(recipesApi.getMy({ page: 0, size: 8 }))
+      auth.isAuthenticated ? favoritesApi.getAll({ page: 0, size: 8 })         : null,
+      auth.isAuthenticated ? mealPlansApi.getMy({ page: 0, size: 20 })         : null,
+      auth.isBlogger       ? recipesApi.getMy({ page: 0, size: 8 })            : null,
+    ])
+
+    if (popRes.status === 'fulfilled' && popRes.value) {
+      popular.value = unwrap(popRes.value)?.content ?? []
+    }
+    if (favRes?.status === 'fulfilled' && favRes.value) {
+      favRecipes.value = unwrap(favRes.value)?.content ?? []
+    }
+    if (planRes?.status === 'fulfilled' && planRes.value) {
+      const data  = unwrap(planRes.value)
+      const plans = data?.content ?? data ?? []
+      const active = plans.find(p => p.status === 'ACTIVE') ?? plans[0] ?? null
+      if (active) {
+        todayMeals.value = (active.entries ?? []).filter(
+          e => normDay(e.dayOfWeek) === todayDow
+        )
       }
     }
-    const results = await Promise.allSettled(calls)
-
-    // Popular
-    if (results[0].status === 'fulfilled') {
-      const d = results[0].value.data?.data ?? results[0].value.data
-      popular.value = d?.content ?? []
-    }
-    // Categories
-    if (results[1].status === 'fulfilled') {
-      categories.value = results[1].value.data?.data ?? results[1].value.data ?? []
-    }
-    // Favorites
-    if (auth.isAuthenticated && results[2]?.status === 'fulfilled') {
-      const d = results[2].value.data?.data ?? results[2].value.data
-      favRecipes.value = d?.content ?? []
-    }
-    // My recipes (blogger/admin)
-    if (auth.isBlogger && results[3]?.status === 'fulfilled') {
-      const d = results[3].value.data?.data ?? results[3].value.data
-      myRecipes.value    = d?.content      ?? []
+    if (myRes?.status === 'fulfilled' && myRes.value) {
+      const d     = unwrap(myRes.value)
+      myRecipes.value     = d?.content      ?? []
       myRecipeCount.value = d?.totalElements ?? 0
     }
   } catch (e) {
-    console.error('HomePage error:', e)
+    console.error('[HomePage]', e)
   } finally {
     loading.value = false
   }
@@ -177,49 +188,107 @@ onMounted(async () => {
       <RouterLink to="/app/meal-plans" class="stat-card stat-link">
         <span class="stat-icon">📅</span>
         <div>
-          <div class="stat-num">7</div>
+          <div class="stat-num">{{ loading ? '—' : (todayMealsSorted.length || '—') }}</div>
           <div class="stat-label">{{ lang.t('nav.meal_plan') }}</div>
         </div>
       </RouterLink>
       <RouterLink to="/app/shopping-lists" class="stat-card stat-link">
         <span class="stat-icon">🛒</span>
         <div>
-          <div class="stat-num">Auto</div>
+          <div class="stat-num">→</div>
           <div class="stat-label">{{ lang.t('nav.shopping') }}</div>
         </div>
       </RouterLink>
     </div>
 
-    <!-- ── Saved Recipes ── (logged in + has favorites) -->
-    <section v-if="auth.isAuthenticated" class="section">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span class="section-icon">❤️</span>
-          {{ lang.t('home.saved') }}
-          <span v-if="favorites.count > 0" class="section-count">{{ favorites.count }}</span>
-        </h2>
-        <RouterLink v-if="favorites.count > 0" to="/app/saved" class="section-link">
-          {{ lang.t('home.view_all') }}
-        </RouterLink>
-      </div>
+    <!-- ── Two-column: Meal Plan + Saved ── -->
+    <div v-if="auth.isAuthenticated" class="two-col">
 
-      <!-- Loading -->
-      <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
-      </div>
+      <!-- Kunlik ovqat rejasi -->
+      <section class="today-widget">
+        <div class="today-header">
+          <div class="today-header-left">
+            <div class="today-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+                <line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>
+              </svg>
+            </div>
+            <div>
+              <div class="today-label">Kunlik ovqat rejasi</div>
+              <div class="today-date">{{ todayDateStr }}</div>
+            </div>
+          </div>
+          <RouterLink to="/app/meal-plans" class="today-link">
+            Ko'rish
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+          </RouterLink>
+        </div>
 
-      <!-- Has favorites -->
-      <div v-else-if="favRecipes.length" class="recipe-grid-sm">
-        <RecipeCard v-for="r in favRecipes" :key="r.id" :recipe="r" />
-      </div>
+        <div v-if="loading" class="today-list">
+          <div v-for="i in 3" :key="i" class="today-item-skeleton" />
+        </div>
 
-      <!-- No favorites yet -->
-      <div v-else class="empty-inline">
-        <span class="empty-inline-icon">🤍</span>
-        <span class="empty-inline-text">{{ lang.t('home.no_fav') }}</span>
-        <RouterLink to="/app/recipes" class="empty-inline-link">{{ lang.t('home.explore') }}</RouterLink>
-      </div>
-    </section>
+        <div v-else-if="todayMealsSorted.length" class="today-list">
+          <RouterLink
+            v-for="entry in todayMealsSorted"
+            :key="entry.id"
+            :to="`/app/recipes/${entry.recipeId}`"
+            class="today-item"
+            :class="`today-item--${entry.mealType.toLowerCase()}`"
+          >
+            <div class="today-item-thumb">
+              <img v-if="entry.recipeImageUrl" :src="entry.recipeImageUrl" :alt="entry.recipeTitleUz" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3"/>
+              </svg>
+            </div>
+            <div class="today-item-body">
+              <span class="today-item-type">{{ MEAL_LABELS[entry.mealType]?.icon }}&nbsp;{{ MEAL_LABELS[entry.mealType]?.uz }}</span>
+              <span class="today-item-name">{{ entry.recipeTitleUz || entry.recipeTitleRu }}</span>
+            </div>
+            <svg class="today-item-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </RouterLink>
+        </div>
+
+        <div v-else class="today-empty">
+          <div class="today-empty-illo">📅</div>
+          <div class="today-empty-body">
+            <span class="today-empty-title">Bugun uchun reja yo'q</span>
+            <RouterLink to="/app/meal-plans" class="today-empty-link">Reja tuzish →</RouterLink>
+          </div>
+        </div>
+      </section>
+
+      <!-- Saqlangan retseptlar -->
+      <section class="saved-widget">
+        <div class="section-header">
+          <h2 class="section-title">
+            <span class="section-icon">❤️</span>
+            {{ lang.t('home.saved') }}
+            <span v-if="favorites.count > 0" class="section-count">{{ favorites.count }}</span>
+          </h2>
+          <RouterLink v-if="favorites.count > 0" to="/app/saved" class="section-link">
+            {{ lang.t('home.view_all') }}
+          </RouterLink>
+        </div>
+
+        <div v-if="loading" class="recipe-grid-sm">
+          <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+        </div>
+        <div v-else-if="favRecipes.length" class="recipe-grid-sm">
+          <RecipeCard v-for="r in favPreview" :key="r.id" :recipe="r" />
+        </div>
+        <div v-else class="empty-inline">
+          <span class="empty-inline-icon">🤍</span>
+          <span class="empty-inline-text">{{ lang.t('home.no_fav') }}</span>
+          <RouterLink to="/app/recipes" class="empty-inline-link">{{ lang.t('home.explore') }}</RouterLink>
+        </div>
+      </section>
+
+    </div>
 
     <!-- ── My Recipes ── (blogger/admin only) -->
     <section v-if="auth.isBlogger" class="section">
@@ -247,31 +316,6 @@ onMounted(async () => {
         <span class="empty-inline-icon">✍️</span>
         <span class="empty-inline-text">{{ lang.t('home.no_my') }}</span>
         <button @click="openCreateRecipe" class="empty-inline-link empty-inline-btn">{{ lang.t('home.btn_create') }}</button>
-      </div>
-    </section>
-
-    <!-- ── Categories ── -->
-    <section class="section">
-      <div class="section-header">
-        <h2 class="section-title">
-          <span class="section-icon">🏷️</span>
-          {{ lang.t('home.categories') }}
-        </h2>
-      </div>
-
-      <div v-if="loading" class="cat-scroll">
-        <div v-for="i in 7" :key="i" class="cat-skeleton" />
-      </div>
-      <div v-else-if="categories.length" class="cat-scroll">
-        <RouterLink
-          v-for="cat in categories"
-          :key="cat.id"
-          :to="`/app/recipes?category=${cat.id}`"
-          class="cat-item"
-        >
-          <span class="cat-icon">{{ catIcon(cat) }}</span>
-          <span class="cat-name">{{ lang.catName(cat) }}</span>
-        </RouterLink>
       </div>
     </section>
 
@@ -553,61 +597,207 @@ onMounted(async () => {
   padding: 0;
 }
 
-/* ── Categories ── */
-.cat-scroll {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  scrollbar-width: none;
+/* ── Two-column layout ── */
+.two-col {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  align-items: start;
 }
-.cat-scroll::-webkit-scrollbar { display: none; }
-.cat-item {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 10px;
-  width: 78px;
-  border-radius: 16px;
+@media (max-width: 900px) {
+  .two-col { grid-template-columns: 1fr; }
+}
+
+/* Umumiy panel: today-widget + saved-widget */
+.today-widget,
+.saved-widget {
   background: var(--bg-card);
   border: 1px solid var(--bd);
-  text-decoration: none;
-  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+  border-radius: 20px;
 }
-.cat-item:hover {
-  background: rgba(216,90,48,0.08);
-  border-color: rgba(216,90,48,0.25);
-  transform: translateY(-2px);
+
+.saved-widget {
+  padding: 20px;
+  min-width: 0; /* grid ichida overflow-x ishlashi uchun */
 }
-.cat-icon {
-  width: 48px; height: 48px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 24px; line-height: 1;
-  background: rgba(216,90,48,0.08);
-  border: 1px solid rgba(216,90,48,0.15);
-  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+
+.today-widget {
+  padding: 20px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
-.cat-item:hover .cat-icon {
-  background: rgba(216,90,48,0.14);
-  border-color: rgba(216,90,48,0.35);
-  transform: scale(1.05);
+
+/* Header */
+.today-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-.cat-name {
-  font-size: 10px; font-weight: 700; color: var(--tx-4);
-  text-align: center; line-height: 1.2;
-  overflow: hidden; display: -webkit-box;
-  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+.today-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.cat-item:hover .cat-name { color: #E8713E; }
-.cat-skeleton {
+.today-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(216,90,48,0.1);
+  border: 1px solid rgba(216,90,48,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  width: 78px; height: 88px;
-  border-radius: 16px;
+  color: #E8713E;
+}
+.today-icon-wrap svg { width: 18px; height: 18px; }
+.today-label {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx-1);
+  line-height: 1.2;
+}
+.today-date {
+  font-size: 12px;
+  color: var(--tx-4);
+  font-weight: 500;
+  margin-top: 1px;
+}
+.today-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #E8713E;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(216,90,48,0.08);
+  transition: background 0.2s, gap 0.15s;
+}
+.today-link:hover { background: rgba(216,90,48,0.14); gap: 5px; }
+.today-link svg { width: 13px; height: 13px; }
+
+/* List */
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Row item */
+.today-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 0.18s, border-color 0.18s, transform 0.15s;
+  background: var(--bg-input);
+}
+.today-item:hover {
+  transform: translateX(4px);
+  border-color: var(--bd-md);
+}
+
+/* Rangli left-accent har bir ovqat turi uchun */
+.today-item--breakfast { border-left: 3px solid #60a5fa; }
+.today-item--lunch     { border-left: 3px solid #34d399; }
+.today-item--dinner    { border-left: 3px solid #f97316; }
+.today-item--snack     { border-left: 3px solid #a78bfa; }
+
+/* Kichik thumbnail */
+.today-item-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-5);
+}
+.today-item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.today-item-thumb svg { width: 20px; height: 20px; }
+
+/* Matn bloki */
+.today-item-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.today-item-type {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx-4);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.today-item-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* O'q */
+.today-item-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--tx-5);
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+.today-item:hover .today-item-chevron {
+  color: #E8713E;
+  transform: translateX(2px);
+}
+
+/* Skeleton */
+.today-item-skeleton {
+  height: 64px;
+  border-radius: 14px;
   background: var(--bg-input);
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Empty */
+.today-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px;
+}
+.today-empty-illo { font-size: 32px; flex-shrink: 0; }
+.today-empty-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.today-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tx-3);
+}
+.today-empty-link {
+  font-size: 13px;
+  font-weight: 700;
+  color: #E8713E;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.today-empty-link:hover { color: #F0997B; }
 
 /* ── Welcome banner responsive ── */
 @media (max-width: 640px) {

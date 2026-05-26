@@ -13,11 +13,11 @@ const theme    = useThemeStore()
 const menuOpen = ref(false)
 
 const nav = computed(() => [
-  { label: langStore.t('nav.home'),      to: '/app',               icon: 'home'     },
-  { label: langStore.t('nav.recipes'),   to: '/app/recipes',       icon: 'book'     },
-  { label: langStore.t('nav.saved'),     to: '/app/saved',         icon: 'heart'    },
-  { label: langStore.t('nav.meal_plan'), to: '/app/meal-plans',    icon: 'calendar' },
-  { label: langStore.t('nav.shopping'),  to: '/app/shopping-lists', icon: 'cart'   },
+  { label: langStore.t('nav.home'),      to: '/app',                icon: 'home',     auth: true  },
+  { label: langStore.t('nav.recipes'),   to: '/app/recipes',        icon: 'book',     auth: false },
+  { label: langStore.t('nav.saved'),     to: '/app/saved',          icon: 'heart',    auth: true  },
+  { label: langStore.t('nav.meal_plan'), to: '/app/meal-plans',     icon: 'calendar', auth: true  },
+  { label: langStore.t('nav.shopping'),  to: '/app/shopping-lists', icon: 'cart',     auth: true  },
 ])
 
 const isActive = (to) =>
@@ -59,7 +59,11 @@ const langs = [
           :key="item.to"
           :to="item.to"
           class="nb-link"
-          :class="{ 'nb-link-active': isActive(item.to) }"
+          :class="{
+            'nb-link-active': isActive(item.to),
+            'nb-link-locked': item.auth && !auth.isAuthenticated
+          }"
+          :title="item.auth && !auth.isAuthenticated ? `${item.label} sahifasi uchun kirish talab qilinadi` : ''"
         >
           <!-- Icon -->
           <svg v-if="item.icon === 'home'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
@@ -68,6 +72,13 @@ const langs = [
           <svg v-else-if="item.icon === 'calendar'" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2" stroke-linecap="round"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
           {{ item.label }}
+          <!-- Lock badge — faqat login qilmagan userlar uchun -->
+          <span v-if="item.auth && !auth.isAuthenticated" class="nb-lock-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+          </span>
         </RouterLink>
 
         <!-- Admin link (only for admins) -->
@@ -303,6 +314,28 @@ const langs = [
 .nb-link-admin.nb-link-active {
   background: rgba(245,158,11,0.12);
   color: #f59e0b;
+}
+/* Himoyalangan link (login talab qilinadi) */
+.nb-link-locked {
+  opacity: 0.6;
+  position: relative;
+}
+.nb-link-locked:hover {
+  opacity: 0.85;
+}
+.nb-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  color: var(--tx-4);
+  flex-shrink: 0;
+}
+.nb-lock-badge svg {
+  width: 11px;
+  height: 11px;
 }
 
 /* ── Right side ── */

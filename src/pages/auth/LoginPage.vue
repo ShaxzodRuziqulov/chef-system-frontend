@@ -20,6 +20,13 @@ const redirectPath = computed(() =>
     typeof route.query.redirect === 'string' ? route.query.redirect : '/'
 )
 
+// Redirect sababi: foydalanuvchi himoyalangan sahifaga kirishga urindi
+const redirectReason = computed(() =>
+    typeof route.query.page === 'string' && route.query.page
+      ? route.query.page
+      : null
+)
+
 const schema = yup.object({
   username: yup.string().required("Username kiritilishi shart").min(3, 'Kamida 3 ta belgi'),
   password: yup.string().required("Parol kiritilishi shart").min(4, 'Kamida 4 ta belgi'),
@@ -105,6 +112,20 @@ onMounted(() => {
       </div>
       <h1 class="title">OshPaz</h1>
       <p class="subtitle">{{ lang.t('auth.login_sub') }}</p>
+
+      <!-- Redirect sababi banner -->
+      <div v-if="redirectReason" class="redirect-notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <div>
+          <span class="redirect-notice-title">Kirish talab qilinadi</span>
+          <span class="redirect-notice-sub">
+            <strong>{{ redirectReason }}</strong> sahifasiga o'tish uchun tizimga kiring
+          </span>
+        </div>
+      </div>
 
       <!-- Form -->
       <form @submit.prevent="onSubmit" novalidate class="form">
@@ -826,6 +847,53 @@ onMounted(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── Redirect notice ── */
+.redirect-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(216, 90, 48, 0.08);
+  border: 1.5px solid rgba(216, 90, 48, 0.25);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  animation: cardIn 0.4s ease both;
+}
+
+.redirect-notice svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #E8713E;
+  margin-top: 1px;
+}
+
+.redirect-notice > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.redirect-notice-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #E8713E;
+}
+
+.redirect-notice-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tx-3);
+  line-height: 1.4;
+}
+
+.redirect-notice-sub strong {
+  color: var(--tx-1);
+  font-weight: 700;
 }
 
 /* ── Server Error ── */

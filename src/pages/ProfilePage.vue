@@ -200,7 +200,7 @@ const leaveError      = ref('')
 async function confirmLeaveOshpaz() {
   leaveLoading.value = true; leaveError.value = ''
   try {
-    await usersApi.leaveOshpaz(auth.user.id)
+    await usersApi.leaveOshpaz()
     showLeaveModal.value = false
     await auth.fetchUser()
   } catch (e) {

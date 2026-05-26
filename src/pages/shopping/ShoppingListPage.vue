@@ -132,19 +132,46 @@ const isRegenerating = computed(() =>
   lists.value.some(l => l.mealPlanId === Number(selectedPlanId.value))
 )
 
-// Backend "PLANNAME — xarid ro'yxati" formatida saqlaydi
-// Suffiksni olib tashlab, tarjimali nomni qaytaramiz
-function listDisplayName(list) {
-  const raw = list.name || ''
-  // O'zbekcha / ruscha / inglizcha suffikslarni strip qilamiz
-  const cleaned = raw.replace(/\s*[—–-]\s*(xarid ro['ʼ']yxati|список покупок|shopping list)$/i, '').trim()
-  const base = cleaned || raw
-  return base ? `${base} — ${lang.t('shop.title')}` : lang.t('shop.title')
-}
-
 function planForList(list) {
   if (!list.mealPlanId) return null
   return plans.value.find(p => p.id === Number(list.mealPlanId)) ?? null
+}
+
+function listDisplayName(list) {
+  const plan = planForList(list)
+  if (plan?.weekStartDate) {
+    return formatWeekRange(plan.weekStartDate)
+  }
+  // fallback: clean up backend-generated name
+  const raw = list.name || ''
+  return raw.replace(/\s*[—–-]\s*(xarid ro['ʼ']yxati|список покупок|shopping list)$/i, '').trim() || lang.t('shop.title')
+}
+
+function formatWeekRange(startDate) {
+  if (!startDate) return ''
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
+  const s = `${start.getDate()} ${months[start.getMonth()]}`
+  const e = `${end.getDate()} ${months[end.getMonth()]}`
+  return `${s} — ${e}`
+}
+
+function weekRelativeLabel(list) {
+  const plan = planForList(list)
+  if (!plan?.weekStartDate) return ''
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  monday.setHours(0, 0, 0, 0)
+  const planStart = new Date(plan.weekStartDate + 'T00:00:00')
+  const diff = Math.round((planStart - monday) / (7 * 24 * 60 * 60 * 1000))
+  if (diff === 0)  return 'Bu hafta'
+  if (diff === 1)  return 'Keyingi hafta'
+  if (diff === -1) return "O'tgan hafta"
+  if (diff > 1)   return `${diff} hafta keyin`
+  return `${Math.abs(diff)} hafta oldin`
 }
 
 // plan.updatedAt > list.generatedAt → reja ro'yxat yaratilgandan keyin o'zgardi
@@ -223,24 +250,35 @@ async function regenerateForList(list) {
         <!-- Header -->
         <div class="list-header" @click="expanded = expanded === list.id ? null : list.id">
           <div class="lh-left">
-            <!-- Circular progress -->
-            <div class="circle-progress" :style="`--pct: ${progress(list)}`">
-              <svg viewBox="0 0 36 36">
-                <circle class="cp-bg" cx="18" cy="18" r="15" />
-                <circle class="cp-fill" cx="18" cy="18" r="15"
-                  :style="`stroke-dashoffset: ${94 - (94 * progress(list) / 100)}`" />
-              </svg>
-              <span class="cp-text">{{ progress(list) }}%</span>
+            <!-- Progress indicator -->
+            <div class="circle-progress" :class="{ 'cp-done': progress(list) === 100, 'cp-empty': !list.items?.length }">
+              <template v-if="!list.items?.length">
+                <span class="cp-icon">🛒</span>
+              </template>
+              <template v-else-if="progress(list) === 100">
+                <span class="cp-icon">✅</span>
+              </template>
+              <template v-else>
+                <svg viewBox="0 0 36 36">
+                  <circle class="cp-bg" cx="18" cy="18" r="15" />
+                  <circle class="cp-fill" cx="18" cy="18" r="15"
+                    :style="`stroke-dashoffset: ${94 - (94 * progress(list) / 100)}`" />
+                </svg>
+                <span class="cp-text">{{ progress(list) }}%</span>
+              </template>
             </div>
 
             <div class="lh-info">
               <div class="lh-name-row">
                 <span class="lh-name">{{ listDisplayName(list) }}</span>
-                <span v-if="list.completed" class="badge-done">{{ lang.t('shop.done_badge') }}</span>
+                <span v-if="weekRelativeLabel(list)" class="badge-week">{{ weekRelativeLabel(list) }}</span>
+                <span v-if="progress(list) === 100" class="badge-done">{{ lang.t('shop.done_badge') }}</span>
               </div>
               <div class="lh-meta">
-                <span>{{ purchasedCount(list) }} / {{ list.items?.length || 0 }} {{ lang.t('shop.items') }}</span>
-                <span v-if="list.mealPlanName" class="lh-plan">· {{ list.mealPlanName }}</span>
+                <span class="lh-count"
+                  :class="{ 'lh-count--some': purchasedCount(list) > 0 && progress(list) < 100 }">
+                  {{ purchasedCount(list) }} / {{ list.items?.length || 0 }} {{ lang.t('shop.items') }}
+                </span>
               </div>
 
               <!-- Progress bar -->
@@ -300,27 +338,54 @@ async function regenerateForList(list) {
           </div>
         </div>
 
-        <!-- Items grouped by category -->
+        <!-- Items: pending first, then purchased -->
         <Transition name="expand">
           <div v-if="expanded === list.id" class="items-wrap">
-            <div
-              v-for="item in list.items"
-              :key="item.id"
-              class="item-row"
-              :class="{ 'item-done': item.status === 'PURCHASED' }"
-              @click="toggleItem(list.id, item.id, item.status)"
-            >
-              <div class="item-check" :class="{ 'check-done': item.status === 'PURCHASED' }">
-                <svg v-if="item.status === 'PURCHASED'"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                </svg>
-              </div>
-              <span class="item-name">{{ lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu }}</span>
-              <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
-            </div>
 
             <div v-if="!list.items?.length" class="items-empty">{{ lang.t('shop.empty_list') }}</div>
+
+            <!-- Sotib olinmaganlar -->
+            <template v-if="list.items?.filter(i => i.status !== 'PURCHASED').length">
+              <div class="items-section-label">
+                Kerakli ({{ list.items.filter(i => i.status !== 'PURCHASED').length }})
+              </div>
+              <div
+                v-for="item in list.items.filter(i => i.status !== 'PURCHASED')"
+                :key="item.id"
+                class="item-row"
+                @click="toggleItem(list.id, item.id, item.status)"
+              >
+                <div class="item-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <span class="item-name">{{ lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu }}</span>
+                <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
+              </div>
+            </template>
+
+            <!-- Sotib olinganlar -->
+            <template v-if="list.items?.filter(i => i.status === 'PURCHASED').length">
+              <div class="items-section-label items-section-label--done">
+                Sotib olindi ({{ list.items.filter(i => i.status === 'PURCHASED').length }})
+              </div>
+              <div
+                v-for="item in list.items.filter(i => i.status === 'PURCHASED')"
+                :key="item.id"
+                class="item-row item-done"
+                @click="toggleItem(list.id, item.id, item.status)"
+              >
+                <div class="item-check check-done">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </div>
+                <span class="item-name">{{ lang.ingName(item) || item.ingredientNameUz || item.ingredientNameRu }}</span>
+                <span class="item-amount">{{ units.formatAmount(item.amount, item.unit) }}</span>
+              </div>
+            </template>
+
           </div>
         </Transition>
 
@@ -482,6 +547,14 @@ async function regenerateForList(list) {
   font-weight: 800;
   color: #E8713E;
 }
+.cp-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
 
 .lh-info { flex: 1; min-width: 0; }
 .lh-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -491,11 +564,21 @@ async function regenerateForList(list) {
   border-radius: 8px;
   font-size: 10px;
   font-weight: 800;
-  background: rgba(216,90,48,0.15);
-  color: #E8713E;
+  background: rgba(34,197,94,0.12);
+  color: #4ade80;
+}
+.badge-week {
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.06);
+  color: var(--tx-5);
+  border: 1px solid var(--bd);
 }
 .lh-meta { font-size: 12px; color: var(--tx-5); margin-top: 3px; font-weight: 600; }
-.lh-plan { color: var(--tx-6); }
+.lh-count { }
+.lh-count--some { color: #E8713E; }
 
 .progress-bar {
   height: 4px;
@@ -576,6 +659,20 @@ async function regenerateForList(list) {
 .items-wrap {
   border-top: 1px solid var(--bd);
 }
+.items-section-label {
+  padding: 8px 20px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--tx-5);
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--bd);
+}
+.items-section-label--done {
+  color: var(--tx-6);
+  border-top: 1px solid var(--bd);
+}
 .item-row {
   display: flex;
   align-items: center;
@@ -600,11 +697,13 @@ async function regenerateForList(list) {
   justify-content: center;
   transition: all 0.2s;
 }
+.item-check svg { width: 11px; height: 11px; color: var(--bd-xl); }
+.item-row:hover .item-check svg { color: rgba(216,90,48,0.4); }
 .item-check.check-done {
-  background: #D85A30;
-  border-color: #D85A30;
+  background: #22c55e;
+  border-color: #22c55e;
 }
-.item-check svg { width: 11px; height: 11px; color: #fff; }
+.item-check.check-done svg { color: #fff; }
 
 .item-name   { flex: 1; font-size: 14px; font-weight: 600; color: var(--tx-2); transition: all 0.2s; }
 .item-amount { font-size: 13px; font-weight: 700; color: var(--tx-5); }

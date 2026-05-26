@@ -112,7 +112,7 @@ router.beforeEach((to) => {
 
   // Himoyalangan sahifa → login talab qilinadi
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { name: 'Login', query: { redirect: to.fullPath } }
+    return { name: 'Login', query: { redirect: to.fullPath, page: to.meta.title ?? '' } }
   }
 
   // Admin sahifasi → faqat adminlar kirishi mumkin

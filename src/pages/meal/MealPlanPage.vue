@@ -3,7 +3,7 @@ export default { name: 'MealPlans' }
 </script>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { mealPlansApi }   from '@/api/mealPlans'
 import { recipesApi }     from '@/api/recipes'
 import { useAuthStore }   from '@/stores/authStore'
@@ -18,6 +18,11 @@ const router = useRouter()
 const auth   = useAuthStore()
 const lang   = useLangStore()
 const toast  = useToast()
+
+const fabVisible = ref(false)
+function onScroll() { fabVisible.value = window.scrollY > 200 }
+onMounted(() => window.addEventListener('scroll', onScroll))
+onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
 const plans      = ref([])
 const allRecipes = ref([])
@@ -74,10 +79,11 @@ async function createPlan() {
       plan = actRes.data?.data ?? actRes.data ?? plan
     } catch { /* faollashtirish xatosi bo'lsa plan baribir qo'shiladi */ }
 
-    plans.value.unshift(plan)
-    expanded.value = plan.id   // yangi plan avtomatik ochiq
+    expanded.value = plan.id
     showCreate.value = false
     resetCreate()
+    // Barcha rejalarni qayta yuklaymiz — eski rejaning statusi o'zgargan bo'lishi mumkin
+    await load()
     toast.success("Haftalik reja yaratildi!")
   } catch (e) {
     createError.value = parseApiError(e, lang.t('common.error_save'))
@@ -188,6 +194,17 @@ function dayMonth(plan, i) {
   d.setDate(start.getDate() + i)
   const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
   return months[d.getMonth()]
+}
+
+function isToday(plan, i) {
+  if (!plan.weekStartDate) return false
+  const start = new Date(plan.weekStartDate + 'T00:00:00')
+  const d = new Date(start)
+  d.setDate(start.getDate() + i)
+  const now = new Date()
+  return d.getDate() === now.getDate() &&
+         d.getMonth() === now.getMonth() &&
+         d.getFullYear() === now.getFullYear()
 }
 
 // ── Add entry modal ────────────────────────────────────────────────────
@@ -442,6 +459,23 @@ function formatDate(d) {
   return `${date.getDate()} ${months[date.getMonth()]}`
 }
 
+function weekRelativeLabel(plan) {
+  if (!plan.weekStartDate) return ''
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  monday.setHours(0,0,0,0)
+
+  const planStart = new Date(plan.weekStartDate + 'T00:00:00')
+  const diff = Math.round((planStart - monday) / (7 * 24 * 60 * 60 * 1000))
+
+  if (diff === 0)  return 'Bu hafta'
+  if (diff === 1)  return 'Keyingi hafta'
+  if (diff === -1) return 'O\'tgan hafta'
+  if (diff > 1)   return `${diff} hafta keyin`
+  return `${Math.abs(diff)} hafta oldin`
+}
+
 // ── Load ────────────────────────────────────────────────────────────────
 onMounted(async () => {
   if (!auth.isAuthenticated) { router.push('/login'); return }
@@ -499,6 +533,7 @@ async function load() {
           <div class="plan-info">
             <div class="plan-name-row">
               <h3 class="plan-name">{{ plan.name }}</h3>
+              <span class="week-rel-badge">{{ weekRelativeLabel(plan) }}</span>
               <span class="status-badge" :class="statusInfo[plan.status]?.cls">
                 {{ statusInfo[plan.status]?.label }}
               </span>
@@ -551,7 +586,7 @@ async function load() {
               <div class="grid-corner"></div>
 
               <!-- Kun sarlavhalari -->
-              <div v-for="(dayName, i) in DAYS" :key="'h'+dayName" class="day-header">
+              <div v-for="(dayName, i) in DAYS" :key="'h'+dayName" class="day-header" :class="{ 'day-header--today': isToday(plan, i) }">
                 <span class="day-short">{{ dayShort[i] }}</span>
                 <span class="day-num">{{ dayDate(plan, i) }}</span>
                 <span class="day-mon">{{ dayMonth(plan, i) }}</span>
@@ -562,15 +597,16 @@ async function load() {
 
                 <!-- Qator labeli -->
                 <div class="meal-row-label">
+                  <span class="meal-row-icon">{{ { BREAKFAST: '☀️', LUNCH: '🍽️', DINNER: '🌙' }[mealType] }}</span>
                   <span class="meal-row-dot" :style="{ background: MEAL_COLORS[mealType]?.dot }"/>
-                  <span class="meal-row-name">{{ mealLabel[mealType] }}</span>
                 </div>
 
                 <!-- 7 kun katak -->
                 <div
-                  v-for="dayName in DAYS"
+                  v-for="(dayName, di) in DAYS"
                   :key="mealType+dayName"
                   class="day-cell"
+                  :class="{ 'day-cell--today': isToday(plan, di) }"
                 >
                   <div
                     v-for="entry in entriesForDay(plan, dayName).filter(e => e.mealType === mealType)"
@@ -599,7 +635,20 @@ async function load() {
                       </svg>
                     </button>
                   </div>
+                  <!-- Bo'sh katak placeholder -->
+                  <div
+                    v-if="entriesForDay(plan, dayName).filter(e => e.mealType === mealType).length === 0"
+                    class="cell-empty-hint"
+                    @click.stop="openEntryModal(plan.id, dayName, mealType)"
+                    :title="`${mealLabel[mealType]} qo'shish`"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
+                    </svg>
+                  </div>
+                  <!-- Entry bo'lganida qo'shimcha qo'shish tugmasi -->
                   <button
+                    v-if="entriesForDay(plan, dayName).filter(e => e.mealType === mealType).length > 0"
                     class="cell-add-btn"
                     @click.stop="openEntryModal(plan.id, dayName, mealType)"
                     :title="`${mealLabel[mealType]} qo'shish`"
@@ -611,6 +660,13 @@ async function load() {
                 </div>
 
               </template>
+            </div>
+            <!-- Legend -->
+            <div class="grid-legend">
+              <span v-for="(color, mt) in MEAL_COLORS" :key="mt" class="legend-item">
+                <span class="legend-dot" :style="{ background: color.dot }"/>
+                {{ mealLabel[mt] }}
+              </span>
             </div>
           </div>
         </Transition>
@@ -1013,6 +1069,22 @@ async function load() {
       @cancel="confirmEntryDelete.show = false"
     />
 
+    <!-- Floating action button — scroll qilinganda ko'rinadi -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <button
+          v-if="fabVisible"
+          class="fab-new-plan fab-visible"
+          @click="resetCreate(); showCreate = true"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/>
+          </svg>
+          {{ lang.t('meal.new_plan') }}
+        </button>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
 
@@ -1101,6 +1173,17 @@ async function load() {
 .dot-sep        { color: var(--tx-6); }
 .entry-count    { color: var(--tx-4); }
 
+/* Week relative label */
+.week-rel-badge {
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.06);
+  color: var(--tx-5);
+  border: 1px solid var(--bd);
+}
+
 /* Status badges */
 .status-badge {
   padding: 3px 10px;
@@ -1110,7 +1193,7 @@ async function load() {
   letter-spacing: 0.03em;
 }
 .st-draft     { background: rgba(100,116,139,0.15); color: var(--tx-3); }
-.st-active    { background: rgba(216,90,48,0.15);   color: #E8713E; }
+.st-active    { background: rgba(34,197,94,0.12); color: #4ade80; }
 .st-completed { background: rgba(59,130,246,0.15);  color: #60a5fa; }
 
 /* Action buttons */
@@ -1149,26 +1232,55 @@ async function load() {
 }
 .weekly-grid {
   display: grid;
-  grid-template-columns: 90px repeat(7, minmax(100px, 1fr));
-  gap: 6px;
-  min-width: 800px;
-  padding-top: 12px;
+  grid-template-columns: 80px repeat(7, minmax(100px, 1fr));
+  gap: 1px;
+  background: var(--bd);
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  overflow: hidden;
+  min-width: 780px;
+  margin-top: 12px;
+}
+
+/* All grid cells share the same surface background */
+.grid-corner,
+.day-header,
+.meal-row-label,
+.day-cell {
+  background: var(--bg-surface);
 }
 
 /* Corner */
-.grid-corner { /* bo'sh */ }
+.grid-corner { background: var(--bg-card); }
 
 /* Kun sarlavhasi */
 .day-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding-bottom: 8px;
+  gap: 2px;
+  padding: 10px 6px;
+  background: var(--bg-card);
 }
 .day-short { font-size: 10px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.08em; }
 .day-num   { font-size: 20px; font-weight: 900; color: var(--tx-2); line-height: 1.1; }
-.day-mon   { font-size: 10px; color: var(--tx-6); font-weight: 600; }
+.day-mon   { font-size: 10px; color: var(--tx-5); font-weight: 600; }
+
+/* Today highlight */
+.day-header--today { background: var(--bg-card); }
+.day-header--today .day-short { color: #E8713E; }
+.day-header--today .day-num   {
+  color: #fff;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(216,90,48,0.4);
+}
+.day-cell--today { background: var(--bg-surface); }
 
 /* Ovqat vaqti qator labeli */
 .meal-row-label {
@@ -1178,20 +1290,15 @@ async function load() {
   justify-content: center;
   gap: 4px;
   padding: 6px 4px;
-  border-radius: 10px;
   background: var(--bg-card);
-  border: 1px solid var(--bd);
   min-height: 64px;
 }
-.meal-row-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.meal-row-name { font-size: 9px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em; writing-mode: vertical-rl; transform: rotate(180deg); }
+.meal-row-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.meal-row-icon { font-size: 18px; line-height: 1; }
 
 /* Kun katak */
 .day-cell {
   min-height: 64px;
-  border-radius: 10px;
-  border: 1px solid var(--bd);
-  background: var(--bg-card);
   padding: 5px;
   display: flex;
   flex-direction: column;
@@ -1211,7 +1318,7 @@ async function load() {
   gap: 5px;
   transition: filter 0.15s;
 }
-.entry-chip:hover { filter: brightness(1.08); }
+.entry-chip:hover { filter: brightness(1.05); }
 .chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .entry-recipe   { font-size: 10px; font-weight: 700; color: var(--tx-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .entry-servings { font-size: 9px; color: var(--tx-4); font-weight: 600; }
@@ -1235,26 +1342,77 @@ async function load() {
 .entry-chip:hover .entry-del { opacity: 1; }
 .entry-del:hover { background: rgba(239,68,68,0.25); }
 
-/* Katak qo'shish tugmasi */
-.cell-add-btn {
-  flex: 1;
+/* Bo'sh katak placeholder — doim ko'rinadi */
+.cell-empty-hint {
   width: 100%;
-  min-height: 48px;
+  flex: 1;
+  min-height: 44px;
   border-radius: 7px;
-  border: 1.5px dashed var(--bd-md);
+  border: 1.5px dashed rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  color: var(--tx-6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.cell-empty-hint svg { width: 13px; height: 13px; opacity: 0.35; }
+.day-cell:hover .cell-empty-hint {
+  border-color: rgba(216,90,48,0.3);
+  background: rgba(216,90,48,0.04);
+  color: #E8713E;
+}
+.day-cell:hover .cell-empty-hint svg { opacity: 0.7; }
+.cell-empty-hint:hover {
+  border-color: rgba(216,90,48,0.45) !important;
+  background: rgba(216,90,48,0.08) !important;
+}
+
+/* Katak qo'shish tugmasi (entry bo'lgan katak uchun) */
+.cell-add-btn {
+  width: 100%;
+  min-height: 28px;
+  border-radius: 6px;
+  border: 1.5px dashed var(--bd-lg);
   background: none;
   color: var(--tx-6);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  opacity: 0;
+  transition: all 0.15s;
 }
-.cell-add-btn svg { width: 14px; height: 14px; }
+.day-cell:hover .cell-add-btn { opacity: 1; }
+.cell-add-btn svg { width: 12px; height: 12px; }
 .cell-add-btn:hover {
-  border-color: rgba(216,90,48,0.4);
-  background: rgba(216,90,48,0.06);
+  border-color: rgba(216,90,48,0.35);
+  background: rgba(216,90,48,0.05);
   color: #E8713E;
+}
+
+/* Legend */
+.grid-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 10px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-4);
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* ── Expand transition ── */
@@ -1709,6 +1867,30 @@ async function load() {
 .diff-med  { background: rgba(245,158,11,0.12); color: #fbbf24; }
 .diff-hard { background: rgba(239,68,68,0.12);  color: #f87171; }
 
+/* ── Floating action button (scroll qilinganda ko'rinadi) ── */
+.fab-new-plan {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(216,90,48,0.45);
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
+}
+.fab-new-plan.fab-visible { display: inline-flex; }
+.fab-new-plan:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(216,90,48,0.55); }
+.fab-new-plan svg { width: 16px; height: 16px; }
+
 /* ── Mobile ── */
 @media (max-width: 640px) {
   /* Plan header — kichikroq padding */
@@ -1733,10 +1915,25 @@ async function load() {
   /* Form row — ustma-ust */
   .form-row { grid-template-columns: 1fr; gap: 10px; }
 
-  /* Grid kichikroq */
-  .weekly-grid { grid-template-columns: 64px repeat(7, minmax(80px, 1fr)); min-width: 640px; gap: 4px; }
-  .day-num     { font-size: 16px; }
-  .meal-row-label { min-height: 56px; padding: 4px 2px; }
-  .cell-add-btn   { min-height: 42px; }
+  /* Grid — horizontal scroll with scroll snap */
+  .weekly-grid-wrap { padding: 0 0 16px; }
+  .weekly-grid {
+    grid-template-columns: 52px repeat(7, minmax(90px, 1fr));
+    min-width: 680px;
+    gap: 1px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  .day-num        { font-size: 15px; }
+  .day-short      { font-size: 9px; }
+  .meal-row-label { min-height: 52px; padding: 4px 2px; }
+  .meal-row-name  { font-size: 8px; }
+  .day-cell       { min-height: 52px; padding: 4px; }
+  .cell-add-btn   { min-height: 36px; }
+  .entry-recipe   { font-size: 9px; }
+
+  /* FAB scroll qilib tushganda ko'rinsin */
+  .fab-new-plan { bottom: 20px; right: 16px; padding: 11px 16px; font-size: 12px; }
 }
 </style>
