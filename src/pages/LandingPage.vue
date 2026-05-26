@@ -545,10 +545,9 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 0 24px;
   height: 64px;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
 }
 .nav-logo {
   display: flex;
@@ -568,6 +567,7 @@ onBeforeUnmount(() => {
 .nav-center {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
 }
 .nav-link {
@@ -581,7 +581,7 @@ onBeforeUnmount(() => {
 }
 .nav-link:hover { color: #E8713E; background: rgba(216, 90, 48, 0.08); }
 
-.nav-actions { display: flex; align-items: center; gap: 10px; }
+.nav-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 
 .btn-outline {
   padding: 8px 18px;

@@ -29,6 +29,22 @@ const recipe  = ref(null)
 const loading = ref(true)
 const tab     = ref('ingredients')
 
+function getEmbedUrl(url) {
+  if (!url) return null
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`
+  if (url.includes('youtube.com/embed/')) return url
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/)
+  if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`
+  if (url.includes('player.vimeo.com/video/')) return url
+  return null
+}
+
+function isLocalVideo(url) {
+  if (!url) return false
+  return url.startsWith('/uploads/') || (!url.includes('youtube') && !url.includes('vimeo') && !url.includes('youtu.be'))
+}
+
 // ── Modal / actions ───────────────────────────────────────────────
 const showFormModal   = ref(false)
 const deleting        = ref(false)
@@ -263,6 +279,27 @@ onMounted(async () => {
             d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
         </svg>
       </button>
+    </div>
+
+    <!-- Video -->
+    <div v-if="recipe.videoUrl" class="video-wrap">
+      <!-- Local uploaded video -->
+      <video
+        v-if="isLocalVideo(recipe.videoUrl)"
+        class="video-iframe"
+        controls
+        preload="metadata"
+        :src="recipe.videoUrl"
+      />
+      <!-- YouTube / Vimeo embed -->
+      <iframe
+        v-else-if="getEmbedUrl(recipe.videoUrl)"
+        :src="getEmbedUrl(recipe.videoUrl)"
+        class="video-iframe"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      />
     </div>
 
     <!-- Title + meta -->
@@ -643,6 +680,25 @@ onMounted(async () => {
 .fav-locked { opacity: 0.6; cursor: not-allowed; }
 .fav-lock   { font-size: 16px; line-height: 1; }
 .fav-loading { opacity: 0.6; pointer-events: none; }
+
+/* ── Video embed ── */
+.video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.video-iframe,
+.video-wrap video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
 
 /* ── Title block ── */
 .title-block { display: flex; flex-direction: column; gap: 10px; }

@@ -42,6 +42,7 @@ function emptyForm() {
     cookTimeMinutes: 30,
     servings:        4,
     imageUrl:        '',
+    videoUrl:        '',
     visible:         true,
     tagIds:          [],
   }
@@ -137,6 +138,44 @@ async function createAndSelectIngredient() {
   }
 }
 
+// ── Video upload ──────────────────────────────────────────────────
+const videoMode      = ref('url')   // 'url' | 'file'
+const videoUploading = ref(false)
+const videoProgress  = ref(0)
+const videoInput     = ref(null)
+
+function isLocalVideo(url) {
+  return url && (url.startsWith('/uploads/') || url.startsWith('http') && !url.includes('youtube') && !url.includes('vimeo'))
+}
+
+async function uploadVideoFile(file) {
+  if (!file) return
+  const MAX = 200 * 1024 * 1024
+  if (file.size > MAX) { toast.error('Video hajmi 200 MB dan oshmasligi kerak'); return }
+  videoUploading.value = true
+  videoProgress.value  = 0
+  try {
+    const res = await uploadApi.video(file, (pct) => { videoProgress.value = pct })
+    form.value.videoUrl = res.data?.data?.url ?? res.data?.url ?? ''
+    toast.success('Video yuklandi!')
+  } catch (err) {
+    toast.error(err?.response?.data?.message || 'Video yuklanmadi')
+  } finally {
+    videoUploading.value = false
+  }
+}
+
+function onVideoFileChange(e) {
+  const file = e.target.files?.[0]
+  if (file) uploadVideoFile(file)
+  e.target.value = ''
+}
+
+function onVideoDrop(e) {
+  const file = e.dataTransfer.files?.[0]
+  if (file) uploadVideoFile(file)
+}
+
 // ── Nutrition ─────────────────────────────────────────────────────
 const nutrition = ref({
   caloriesPerServing: '',
@@ -158,8 +197,9 @@ const difficulties = computed(() => [
 // ── Watch visible → init form ──────────────────────────────────────
 watch(() => props.visible, async (val) => {
   if (!val) return
-  errorMsg.value = ''
+  errorMsg.value  = ''
   activeTab.value = 'basic'
+  videoMode.value = 'url'
 
   // Load categories & tags
   try {
@@ -181,6 +221,7 @@ watch(() => props.visible, async (val) => {
       cookTimeMinutes: r.cookTimeMinutes || 30,
       servings:        r.servings        || 4,
       imageUrl:        r.imageUrl        || '',
+      videoUrl:        r.videoUrl        || '',
       visible:         r.visible         ?? true,
       tagIds:          (r.tags || []).map(t => t.id),
     }
@@ -280,6 +321,7 @@ async function save() {
   try {
     const payload = {
       ...form.value,
+      videoUrl:        form.value.videoUrl?.trim() || null,
       categoryId:      form.value.categoryId ? Number(form.value.categoryId) : null,
       prepTimeMinutes: Number(form.value.prepTimeMinutes),
       cookTimeMinutes: Number(form.value.cookTimeMinutes),
@@ -450,6 +492,42 @@ async function save() {
                 <div class="form-field span-2">
                   <label class="field-label">{{ lang.t('form.image') }}</label>
                   <ImgUpload v-model="form.imageUrl" size="md" :placeholder="lang.t('form.image_hint')" />
+                </div>
+                <!-- Video section -->
+                <div class="form-field span-2">
+                  <label class="field-label">🎬 Video</label>
+                  <div class="video-tabs">
+                    <button type="button" class="vtab" :class="{ 'vtab-active': videoMode === 'url' }" @click="videoMode = 'url'">🔗 Havola (YouTube/Vimeo)</button>
+                    <button type="button" class="vtab" :class="{ 'vtab-active': videoMode === 'file' }" @click="videoMode = 'file'">📁 Fayl yuklash</button>
+                  </div>
+                  <template v-if="videoMode === 'url'">
+                    <input
+                      v-model="form.videoUrl"
+                      class="field-input"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                    />
+                    <span class="field-hint">YouTube yoki Vimeo havolasini kiriting (ixtiyoriy)</span>
+                  </template>
+                  <template v-else>
+                    <div class="video-upload-zone" @click="videoInput?.click()" @dragover.prevent @drop.prevent="onVideoDrop">
+                      <template v-if="videoUploading">
+                        <div class="video-progress-wrap">
+                          <div class="video-progress-bar" :style="{ width: videoProgress + '%' }" />
+                        </div>
+                        <span class="video-upload-hint">Yuklanmoqda... {{ videoProgress }}%</span>
+                      </template>
+                      <template v-else-if="form.videoUrl && isLocalVideo(form.videoUrl)">
+                        <span class="video-uploaded-name">✅ {{ form.videoUrl.split('/').pop() }}</span>
+                        <button type="button" class="video-remove-btn" @click.stop="form.videoUrl = ''">✕ O'chirish</button>
+                      </template>
+                      <template v-else>
+                        <svg class="video-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M4 8a2 2 0 012-2h9a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8z"/></svg>
+                        <span class="video-upload-hint">Bosing yoki faylni bu yerga tashlang</span>
+                        <span class="video-upload-sub">MP4, WebM, MOV, AVI — maks 200 MB</span>
+                      </template>
+                    </div>
+                    <input ref="videoInput" type="file" accept="video/mp4,video/webm,video/quicktime,video/x-msvideo" class="hidden-input" @change="onVideoFileChange" />
+                  </template>
                 </div>
                 <!-- Visible toggle -->
                 <div class="form-field span-2">
@@ -785,6 +863,7 @@ async function save() {
 }
 .field-input:focus { border-color: rgba(216,90,48,0.5); }
 .field-input::placeholder { color: var(--tx-6); }
+.field-hint { font-size: 11px; color: var(--tx-6); margin-top: -2px; }
 .field-textarea {
   padding: 10px 12px; resize: vertical; min-height: 72px;
   background: var(--bg-input);
@@ -1077,6 +1156,44 @@ async function save() {
 .btn-save:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(216,90,48,0.45); }
 .btn-save:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 .btn-save svg { width: 16px; height: 16px; }
+
+/* ── Video ── */
+.hidden-input { display: none; }
+.video-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.vtab {
+  flex: 1; padding: 7px 12px; border-radius: 8px;
+  border: 1px solid var(--bd-md);
+  background: var(--bg-card-md); color: var(--tx-4);
+  font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.vtab-active { background: rgba(216,90,48,0.12); border-color: rgba(216,90,48,0.4); color: #E8713E; }
+.video-upload-zone {
+  min-height: 96px; border: 2px dashed var(--bd-md);
+  border-radius: 12px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; transition: border-color 0.2s, background 0.2s;
+  padding: 16px;
+}
+.video-upload-zone:hover { border-color: rgba(216,90,48,0.5); background: rgba(216,90,48,0.03); }
+.video-upload-icon { width: 32px; height: 32px; color: var(--tx-5); }
+.video-upload-hint { font-size: 13px; color: var(--tx-4); font-weight: 600; }
+.video-upload-sub  { font-size: 11px; color: var(--tx-6); }
+.video-uploaded-name { font-size: 13px; color: #4ade80; font-weight: 700; }
+.video-remove-btn {
+  margin-top: 4px; padding: 4px 12px;
+  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 6px; color: #f87171; font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: background 0.2s;
+}
+.video-remove-btn:hover { background: rgba(239,68,68,0.2); }
+.video-progress-wrap {
+  width: 100%; height: 6px; background: var(--bd-lg);
+  border-radius: 100px; overflow: hidden;
+}
+.video-progress-bar {
+  height: 100%; background: linear-gradient(90deg, #D85A30, #E8713E);
+  border-radius: 100px; transition: width 0.3s;
+}
 
 /* ── Animation ── */
 .modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
