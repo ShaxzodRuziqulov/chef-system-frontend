@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive, nextTick } from 'vue'
 import { recipesApi        } from '@/api/recipes'
 import { favoritesApi      } from '@/api/favorites'
 import { mealPlansApi      } from '@/api/mealPlans'
+import { shoppingApi       } from '@/api/shoppingList'
 import RecipeCard            from '@/components/recipe/RecipeCard.vue'
 import RecipeFormModal       from '@/components/recipe/RecipeFormModal.vue'
 import { useLangStore }      from '@/stores/langStore'
@@ -13,13 +14,72 @@ const lang      = useLangStore()
 const auth      = useAuthStore()
 const favorites = useFavoritesStore()
 
+// ── Onboarding ────────────────────────────────────────────────────
+const ONBOARD_KEY = 'onboarding_dismissed_v1'
+const onboardDismissed = ref(false)
+
+const onboardSteps = computed(() => [
+  {
+    id: 'browse',
+    icon: '🔍',
+    title: 'Retseptlarni ko\'rish',
+    desc: 'Minglab retseptlar ichidan o\'zingizga mosini toping',
+    to: '/app/recipes',
+    done: popular.value.length > 0,   // har doim true — retseptlar mavjud
+  },
+  {
+    id: 'favorite',
+    icon: '❤️',
+    title: 'Sevimli retsept saqlang',
+    desc: 'Retsept kartasidagi yurak belgisini bosib saqlang',
+    to: '/app/recipes',
+    done: favorites.count > 0,
+  },
+  {
+    id: 'mealplan',
+    icon: '📅',
+    title: 'Haftalik reja tuzing',
+    desc: 'Hafta uchun nonushta, tushlik va kechki ovqatlarni rejalashtiring',
+    to: '/app/meal-plans',
+    done: todayMealsSorted.value.length > 0,
+  },
+  {
+    id: 'shopping',
+    icon: '🛒',
+    title: 'Xarid ro\'yxati yarating',
+    desc: 'Rejangizdan avtomatik ingredient ro\'yxatini oling',
+    to: '/app/shopping-lists',
+    done: hasShoppingLists.value,
+  },
+])
+
+const onboardProgress = computed(() =>
+  onboardSteps.value.filter(s => s.done).length
+)
+
+const showOnboarding = computed(() =>
+  auth.isAuthenticated &&
+  !onboardDismissed.value &&
+  onboardProgress.value < onboardSteps.value.length
+)
+
+function dismissOnboarding() {
+  onboardDismissed.value = true
+  localStorage.setItem(ONBOARD_KEY, '1')
+}
+
+onMounted(() => {
+  if (localStorage.getItem(ONBOARD_KEY)) onboardDismissed.value = true
+})
+
 // ── State ─────────────────────────────────────────────────────────
-const popular       = ref([])
-const favRecipes    = ref([])
-const myRecipes     = ref([])
-const myRecipeCount = ref(0)
-const todayMeals    = ref([])
-const loading       = ref(true)
+const popular          = ref([])
+const favRecipes       = ref([])
+const myRecipes        = ref([])
+const myRecipeCount    = ref(0)
+const todayMeals       = ref([])
+const hasShoppingLists = ref(false)
+const loading          = ref(true)
 
 // ── Meal plan helpers ─────────────────────────────────────────────
 // JS: 0=Yak…6=Sha → backend: 1=Du…7=Yak
@@ -70,6 +130,35 @@ const roleBadge = computed(() => {
 // Saqlangan retseptlar preview — template ichida .slice() bo'lmasin
 const favPreview = computed(() => favRecipes.value.slice(0, 4))
 
+// ── Scroll rows ───────────────────────────────────────────────────
+const rowStates = reactive({}) // { [id]: { left, right } }
+
+function updateRowState(el) {
+  const id = el?.dataset?.scrollId
+  if (!id) return
+  rowStates[id] = {
+    left:  el.scrollLeft > 8,
+    right: el.scrollLeft + el.clientWidth < el.scrollWidth - 8,
+  }
+}
+
+function onGridScroll(e) { updateRowState(e.currentTarget) }
+
+function scrollRowBy(e, dir) {
+  const wrap = e.currentTarget.closest('.scroll-row-wrap')
+  const grid = wrap?.querySelector('.recipe-grid-sm')
+  if (grid) {
+    grid.scrollBy({ left: dir * 260, behavior: 'smooth' })
+    setTimeout(() => updateRowState(grid), 320)
+  }
+}
+
+function initRows() {
+  nextTick(() => {
+    document.querySelectorAll('.recipe-grid-sm[data-scroll-id]').forEach(updateRowState)
+  })
+}
+
 // ── Recipe Modal ──────────────────────────────────────────────────
 const showRecipeModal = ref(false)
 const editingRecipe   = ref(null)
@@ -95,11 +184,12 @@ const unwrap = (res) => res.data?.data ?? res.data
 onMounted(async () => {
   try {
     // Har bir so'rov nomli — indeks mo'rtligi yo'q
-    const [popRes, favRes, planRes, myRes] = await Promise.allSettled([
+    const [popRes, favRes, planRes, myRes, shopRes] = await Promise.allSettled([
       recipesApi.getAll({ page: 0, size: 8, sort: ['averageRating,desc', 'viewCount,desc'] }),
       auth.isAuthenticated ? favoritesApi.getAll({ page: 0, size: 8 })         : null,
       auth.isAuthenticated ? mealPlansApi.getMy({ page: 0, size: 20 })         : null,
       auth.isBlogger       ? recipesApi.getMy({ page: 0, size: 8 })            : null,
+      auth.isAuthenticated ? shoppingApi.getMy({ page: 0, size: 1 })           : null,
     ])
 
     if (popRes.status === 'fulfilled' && popRes.value) {
@@ -123,10 +213,15 @@ onMounted(async () => {
       myRecipes.value     = d?.content      ?? []
       myRecipeCount.value = d?.totalElements ?? 0
     }
+    if (shopRes?.status === 'fulfilled' && shopRes.value) {
+      const d = unwrap(shopRes.value)
+      hasShoppingLists.value = (d?.totalElements ?? d?.content?.length ?? 0) > 0
+    }
   } catch (e) {
     console.error('[HomePage]', e)
   } finally {
     loading.value = false
+    initRows()
   }
 })
 </script>
@@ -169,6 +264,57 @@ onMounted(async () => {
       </div>
     </div>
 
+    <!-- ── Onboarding ── -->
+    <Transition name="onboard-fade">
+      <div v-if="showOnboarding && !loading" class="onboard-card">
+        <div class="onboard-header">
+          <div class="onboard-title-wrap">
+            <span class="onboard-wave">👋</span>
+            <div>
+              <div class="onboard-title">Xush kelibsiz! Boshlash uchun 4 qadam</div>
+              <div class="onboard-sub">Har bir qadamni bajaring va ilovadan to'liq foydalaning</div>
+            </div>
+          </div>
+          <div class="onboard-progress-wrap">
+            <span class="onboard-progress-text">{{ onboardProgress }} / {{ onboardSteps.length }}</span>
+            <div class="onboard-progress-bar">
+              <div class="onboard-progress-fill"
+                :style="{ width: (onboardProgress / onboardSteps.length * 100) + '%' }" />
+            </div>
+          </div>
+          <button class="onboard-close" @click="dismissOnboarding" title="Yopish">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="onboard-steps">
+          <RouterLink
+            v-for="step in onboardSteps"
+            :key="step.id"
+            :to="step.to"
+            class="onboard-step"
+            :class="{ 'onboard-step--done': step.done }"
+          >
+            <div class="onboard-step-check" :class="{ 'step-check--done': step.done }">
+              <svg v-if="step.done" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+            <span class="onboard-step-icon">{{ step.icon }}</span>
+            <div class="onboard-step-body">
+              <span class="onboard-step-title">{{ step.title }}</span>
+              <span class="onboard-step-desc">{{ step.desc }}</span>
+            </div>
+            <svg class="onboard-step-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </RouterLink>
+        </div>
+      </div>
+    </Transition>
+
     <!-- ── Personal Stats ── (only when logged in) -->
     <div v-if="auth.isAuthenticated" class="stats-row">
       <RouterLink to="/app/saved" class="stat-card stat-link">
@@ -189,7 +335,7 @@ onMounted(async () => {
         <span class="stat-icon">📅</span>
         <div>
           <div class="stat-num">{{ loading ? '—' : (todayMealsSorted.length || '—') }}</div>
-          <div class="stat-label">{{ lang.t('nav.meal_plan') }}</div>
+          <div class="stat-label">Bugungi ovqat</div>
         </div>
       </RouterLink>
       <RouterLink to="/app/shopping-lists" class="stat-card stat-link">
@@ -275,11 +421,18 @@ onMounted(async () => {
           </RouterLink>
         </div>
 
-        <div v-if="loading" class="recipe-grid-sm">
-          <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+        <div v-if="loading" class="scroll-row-wrap">
+          <div class="recipe-grid-sm">
+            <div v-for="i in 4" :key="i" class="recipe-skeleton" />
+          </div>
         </div>
-        <div v-else-if="favRecipes.length" class="recipe-grid-sm">
-          <RecipeCard v-for="r in favPreview" :key="r.id" :recipe="r" />
+        <div v-else-if="favRecipes.length" class="scroll-row-wrap">
+          <div class="recipe-grid-sm" :class="{ 'has-more': rowStates.saved?.right !== false }"
+               data-scroll-id="saved" @scroll="onGridScroll">
+            <RecipeCard v-for="r in favPreview" :key="r.id" :recipe="r" />
+          </div>
+          <button v-if="rowStates.saved?.left"  class="scroll-btn scroll-btn--left"  @click="e => scrollRowBy(e,-1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg></button>
+          <button v-if="rowStates.saved?.right !== false" class="scroll-btn scroll-btn--right" @click="e => scrollRowBy(e, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></button>
         </div>
         <div v-else class="empty-inline">
           <span class="empty-inline-icon">🤍</span>
@@ -306,11 +459,18 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
+      <div v-if="loading" class="scroll-row-wrap">
+        <div class="recipe-grid-sm">
+          <div v-for="i in 8" :key="i" class="recipe-skeleton" />
+        </div>
       </div>
-      <div v-else-if="myRecipes.length" class="recipe-grid-sm">
-        <RecipeCard v-for="r in myRecipes" :key="r.id" :recipe="r" />
+      <div v-else-if="myRecipes.length" class="scroll-row-wrap">
+        <div class="recipe-grid-sm" :class="{ 'has-more': rowStates.my?.right !== false }"
+             data-scroll-id="my" @scroll="onGridScroll">
+          <RecipeCard v-for="r in myRecipes" :key="r.id" :recipe="r" />
+        </div>
+        <button v-if="rowStates.my?.left"  class="scroll-btn scroll-btn--left"  @click="e => scrollRowBy(e,-1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg></button>
+        <button v-if="rowStates.my?.right !== false" class="scroll-btn scroll-btn--right" @click="e => scrollRowBy(e, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <div v-else class="empty-inline">
         <span class="empty-inline-icon">✍️</span>
@@ -329,11 +489,18 @@ onMounted(async () => {
         <RouterLink to="/app/recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
       </div>
 
-      <div v-if="loading" class="recipe-grid-sm">
-        <div v-for="i in 8" :key="i" class="recipe-skeleton" />
+      <div v-if="loading" class="scroll-row-wrap">
+        <div class="recipe-grid-sm">
+          <div v-for="i in 8" :key="i" class="recipe-skeleton" />
+        </div>
       </div>
-      <div v-else-if="popular.length" class="recipe-grid-sm">
-        <RecipeCard v-for="r in popular" :key="r.id" :recipe="r" />
+      <div v-else-if="popular.length" class="scroll-row-wrap">
+        <div class="recipe-grid-sm" :class="{ 'has-more': rowStates.popular?.right !== false }"
+             data-scroll-id="popular" @scroll="onGridScroll">
+          <RecipeCard v-for="r in popular" :key="r.id" :recipe="r" />
+        </div>
+        <button v-if="rowStates.popular?.left"  class="scroll-btn scroll-btn--left"  @click="e => scrollRowBy(e,-1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg></button>
+        <button v-if="rowStates.popular?.right !== false" class="scroll-btn scroll-btn--right" @click="e => scrollRowBy(e, 1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg></button>
       </div>
       <div v-else class="empty-inline">
         <span class="empty-inline-icon">🍽️</span>
@@ -547,6 +714,49 @@ onMounted(async () => {
 .btn-create-sm:hover { background: rgba(216,90,48,0.2); }
 
 /* ── Recipe horizontal scroll row ── */
+.scroll-row-wrap { position: relative; overflow: hidden; border-radius: 20px; }
+
+
+/* Scroll tugmalari */
+.scroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--bd-md);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-2);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+.scroll-btn:hover {
+  background: var(--bg-card-md);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  transform: translateY(-50%) scale(1.08);
+}
+.scroll-btn svg { width: 15px; height: 15px; }
+
+.scroll-btn--right {
+  right: 8px;
+  animation: bounce-x 1.8s ease-in-out infinite;
+}
+.scroll-btn--right:hover { animation-play-state: paused; }
+
+.scroll-btn--left  { left: 8px; }
+
+@keyframes bounce-x {
+  0%, 100% { transform: translateY(-50%) translateX(0);   }
+  50%       { transform: translateY(-50%) translateX(4px); }
+}
+
 .recipe-grid-sm {
   display: flex;
   gap: 14px;
@@ -806,6 +1016,139 @@ onMounted(async () => {
   .quick-actions { width: 100%; }
   .qa-btn { flex: 1; justify-content: center; }
 }
+
+/* ── Onboarding ── */
+.onboard-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(216,90,48,0.2);
+  border-radius: 24px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 12px rgba(216,90,48,0.08);
+}
+
+.onboard-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.onboard-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 200px;
+}
+.onboard-wave { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+.onboard-title { font-size: 15px; font-weight: 800; color: var(--tx-1); }
+.onboard-sub   { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
+
+.onboard-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.onboard-progress-text {
+  font-size: 11px;
+  font-weight: 800;
+  color: #E8713E;
+}
+.onboard-progress-bar {
+  width: 100px;
+  height: 6px;
+  background: var(--bd);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.onboard-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #D85A30, #E8713E);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.onboard-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg-input);
+  color: var(--tx-5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.onboard-close:hover { background: var(--bd); color: var(--tx-2); }
+.onboard-close svg { width: 14px; height: 14px; }
+
+.onboard-steps {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+@media (max-width: 640px) { .onboard-steps { grid-template-columns: 1fr; } }
+
+.onboard-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--bd);
+  background: var(--bg-input);
+  text-decoration: none;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.onboard-step:hover {
+  border-color: rgba(216,90,48,0.3);
+  background: rgba(216,90,48,0.04);
+  transform: translateY(-1px);
+}
+.onboard-step--done {
+  opacity: 0.55;
+}
+.onboard-step--done:hover { opacity: 0.75; }
+
+.onboard-step-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--bd-lg);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.step-check--done {
+  background: #22c55e;
+  border-color: #22c55e;
+}
+.onboard-step-check svg { width: 11px; height: 11px; color: #fff; }
+
+.onboard-step-icon { font-size: 20px; flex-shrink: 0; }
+.onboard-step-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.onboard-step-title { font-size: 13px; font-weight: 700; color: var(--tx-2); }
+.onboard-step-desc  { font-size: 11px; color: var(--tx-5); font-weight: 500; }
+.onboard-step-arrow { width: 14px; height: 14px; color: var(--tx-5); flex-shrink: 0; }
+
+/* Onboarding transition */
+.onboard-fade-enter-active { transition: all 0.3s ease; }
+.onboard-fade-leave-active { transition: all 0.25s ease; }
+.onboard-fade-enter-from   { opacity: 0; transform: translateY(-8px); }
+.onboard-fade-leave-to     { opacity: 0; transform: translateY(-8px); }
 
 @keyframes pulse {
   0%, 100% { opacity: 0.5; }
