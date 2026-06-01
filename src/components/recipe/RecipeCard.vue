@@ -48,6 +48,9 @@ function toggleFav(e) {
       </span>
       <span v-if="recipe.categoryNameUz" class="badge-cat">{{ lang.catName(recipe) }}</span>
 
+      <!-- Video badge -->
+      <span v-if="recipe.videoUrl" class="badge-video">▶ Video</span>
+
       <!-- Heart button — always visible, locked for guests -->
       <button
         class="fav-btn"
@@ -169,6 +172,22 @@ function toggleFav(e) {
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* ── Video badge ── */
+.badge-video {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 9px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; gap: 3px;
 }
 
 /* ── Heart button ── */

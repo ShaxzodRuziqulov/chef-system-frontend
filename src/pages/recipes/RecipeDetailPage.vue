@@ -12,6 +12,7 @@ import { commentsApi }                     from '@/api/comments'
 import RecipeFormModal                     from '@/components/recipe/RecipeFormModal.vue'
 import ConfirmModal                        from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }                 from '@/utils/imageUrl'
+import { formatDate }                     from '@/utils/formatDate'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -25,9 +26,14 @@ function requireAuth(msg) {
   toast.warning(msg)
 }
 
-const recipe  = ref(null)
-const loading = ref(true)
-const tab     = ref('ingredients')
+const recipe          = ref(null)
+const loading         = ref(true)
+const tab             = ref('ingredients')
+const activeGalleryIdx = ref(null)  // gallery fullview uchun
+
+function scrollToVideo() {
+  document.getElementById('recipe-video')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 function getEmbedUrl(url) {
   if (!url) return null
@@ -266,6 +272,14 @@ onMounted(async () => {
         </span>
       </div>
 
+      <!-- Video play button -->
+      <button v-if="recipe.videoUrl" class="play-btn" @click="scrollToVideo" title="Videoni ko'rish">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="12" fill="rgba(0,0,0,0.55)"/>
+          <polygon points="10,8 17,12 10,16" fill="white"/>
+        </svg>
+      </button>
+
       <!-- Favorite button -->
       <button
         class="fav-btn"
@@ -282,7 +296,29 @@ onMounted(async () => {
     </div>
 
     <!-- Video -->
-    <div v-if="recipe.videoUrl" class="video-wrap">
+    <!-- Gallery rasmlari -->
+    <div v-if="recipe.images?.length" class="gallery-wrap">
+      <div class="gallery-strip">
+        <div
+          v-for="(img, i) in recipe.images"
+          :key="img.id"
+          class="gallery-thumb"
+          @click="activeGalleryIdx = i"
+          :class="{ 'gallery-thumb-active': activeGalleryIdx === i }"
+        >
+          <img :src="resolveImageUrl(img.imageUrl)" :alt="`Rasm ${i+1}`" />
+        </div>
+      </div>
+      <div v-if="activeGalleryIdx !== null" class="gallery-fullview">
+        <button class="gal-nav gal-prev" @click="activeGalleryIdx = Math.max(0, activeGalleryIdx - 1)"
+                :disabled="activeGalleryIdx === 0">‹</button>
+        <img :src="resolveImageUrl(recipe.images[activeGalleryIdx].imageUrl)" class="gal-full-img" />
+        <button class="gal-nav gal-next" @click="activeGalleryIdx = Math.min(recipe.images.length-1, activeGalleryIdx + 1)"
+                :disabled="activeGalleryIdx === recipe.images.length - 1">›</button>
+      </div>
+    </div>
+
+    <div v-if="recipe.videoUrl" id="recipe-video" class="video-wrap">
       <!-- Local uploaded video -->
       <video
         v-if="isLocalVideo(recipe.videoUrl)"
@@ -530,7 +566,7 @@ onMounted(async () => {
           <div class="ci-body">
             <div class="ci-header">
               <span class="ci-name">{{ c.userName }}</span>
-              <span class="ci-time">{{ new Date(c.createdAt).toLocaleDateString('uz-UZ') }}</span>
+              <span class="ci-time">{{ formatDate(c.createdAt) }}</span>
             </div>
             <p class="ci-text">{{ c.content }}</p>
           </div>
@@ -1202,4 +1238,52 @@ onMounted(async () => {
   0%, 100% { opacity: 0.5; }
   50%       { opacity: 1; }
 }
+
+/* ── Play button ── */
+.play-btn {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px; height: 64px;
+  border: none; background: transparent;
+  cursor: pointer; z-index: 3;
+  opacity: 0.85; transition: opacity 0.2s, transform 0.2s;
+}
+.play-btn:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+.play-btn svg { width: 64px; height: 64px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+
+/* ── Gallery ── */
+.gallery-wrap { margin-bottom: 24px; }
+
+.gallery-strip {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.gallery-thumb {
+  flex-shrink: 0; width: 88px; height: 66px; border-radius: 10px;
+  overflow: hidden; cursor: pointer; border: 2px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-thumb:hover { transform: translateY(-2px); border-color: rgba(216,90,48,0.4); }
+.gallery-thumb-active { border-color: #E8713E !important; }
+
+.gallery-fullview {
+  position: relative; margin-top: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.gal-full-img {
+  flex: 1; width: 100%; max-height: 400px;
+  object-fit: contain; border-radius: 16px;
+  background: var(--bg-card);
+}
+.gal-nav {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--bg-card); border: 1px solid var(--bd);
+  color: var(--tx-2); font-size: 22px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.gal-nav:hover:not(:disabled) { background: rgba(216,90,48,0.1); border-color: rgba(216,90,48,0.4); color: #E8713E; }
+.gal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

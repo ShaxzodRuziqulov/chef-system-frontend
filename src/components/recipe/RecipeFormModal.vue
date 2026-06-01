@@ -42,10 +42,23 @@ function emptyForm() {
     cookTimeMinutes: 30,
     servings:        4,
     imageUrl:        '',
+    imageUrls:       [],
     videoUrl:        '',
     visible:         true,
     tagIds:          [],
   }
+}
+
+// ── Gallery rasmlari ──────────────────────────────────────────────
+const MAX_GALLERY = 10
+
+function addGallerySlot() {
+  if (form.value.imageUrls.length < MAX_GALLERY)
+    form.value.imageUrls.push('')
+}
+
+function removeGalleryImage(i) {
+  form.value.imageUrls.splice(i, 1)
 }
 
 // ── Steps ─────────────────────────────────────────────────────────
@@ -221,6 +234,7 @@ watch(() => props.visible, async (val) => {
       cookTimeMinutes: r.cookTimeMinutes || 30,
       servings:        r.servings        || 4,
       imageUrl:        r.imageUrl        || '',
+      imageUrls:       (r.images || []).map(img => img.imageUrl),
       videoUrl:        r.videoUrl        || '',
       visible:         r.visible         ?? true,
       tagIds:          (r.tags || []).map(t => t.id),
@@ -322,6 +336,7 @@ async function save() {
     const payload = {
       ...form.value,
       videoUrl:        form.value.videoUrl?.trim() || null,
+      imageUrls:       form.value.imageUrls.filter(u => u?.trim()),
       categoryId:      form.value.categoryId ? Number(form.value.categoryId) : null,
       prepTimeMinutes: Number(form.value.prepTimeMinutes),
       cookTimeMinutes: Number(form.value.cookTimeMinutes),
@@ -493,6 +508,30 @@ async function save() {
                   <label class="field-label">{{ lang.t('form.image') }}</label>
                   <ImgUpload v-model="form.imageUrl" size="md" :placeholder="lang.t('form.image_hint')" />
                 </div>
+
+                <!-- Gallery rasmlari -->
+                <div class="form-field span-2">
+                  <label class="field-label">
+                    🖼️ Gallery rasmlari
+                    <span class="field-hint-inline">(ixtiyoriy, maks {{ MAX_GALLERY }} ta)</span>
+                  </label>
+                  <div class="gallery-grid">
+                    <div v-for="(url, i) in form.imageUrls" :key="i" class="gallery-slot">
+                      <ImgUpload v-model="form.imageUrls[i]" size="sm" placeholder="Rasm" />
+                      <button type="button" class="gallery-remove" @click="removeGalleryImage(i)">✕</button>
+                    </div>
+                    <button
+                      v-if="form.imageUrls.length < MAX_GALLERY"
+                      type="button"
+                      class="gallery-add"
+                      @click="addGallerySlot"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
+                      Rasm qo'shish
+                    </button>
+                  </div>
+                </div>
+
                 <!-- Video section -->
                 <div class="form-field span-2">
                   <label class="field-label">🎬 Video</label>
@@ -1194,6 +1233,31 @@ async function save() {
   height: 100%; background: linear-gradient(90deg, #D85A30, #E8713E);
   border-radius: 100px; transition: width 0.3s;
 }
+
+/* ── Gallery ── */
+.field-hint-inline { font-size: 11px; font-weight: 500; color: var(--tx-5); margin-left: 6px; }
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+}
+.gallery-slot { position: relative; }
+.gallery-remove {
+  position: absolute; top: 4px; right: 4px; z-index: 2;
+  width: 20px; height: 20px; border-radius: 6px;
+  background: rgba(239,68,68,0.8); border: none; color: white;
+  font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.gallery-remove:hover { background: #ef4444; }
+.gallery-add {
+  height: 72px; border-radius: 10px;
+  border: 2px dashed var(--bd-xl); background: var(--bg-input);
+  color: var(--tx-5); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-size: 11px; font-weight: 700; transition: all 0.2s;
+}
+.gallery-add:hover { border-color: rgba(216,90,48,0.45); color: #E8713E; background: rgba(216,90,48,0.05); }
+.gallery-add svg { width: 18px; height: 18px; }
 
 /* ── Animation ── */
 .modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }

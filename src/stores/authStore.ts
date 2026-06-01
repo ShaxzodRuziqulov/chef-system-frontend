@@ -182,16 +182,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await authApi.login(credentials)
 
-      // DEBUG: Backenddan kelayotgan javobni ko'rish uchun
-      console.log('[authStore] login raw response:', response.data)
-
       // Backend javob strukturasini moslashuvchan o'qish:
       // 1) { data: { access_token, refresh_token, user } }  ← ApiResponse wrapper
       // 2) { access_token, refresh_token, user }             ← to'g'ridan-to'g'ri
       const rawData = response.data
       const payload = (rawData as any)?.data ?? rawData
-
-      console.log('[authStore] parsed payload:', payload)
 
       if (!payload?.access_token) {
         throw new Error('access_token topilmadi')

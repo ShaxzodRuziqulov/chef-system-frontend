@@ -7,6 +7,7 @@ import { recipesApi }      from '@/api/recipes'
 import { categoriesApi, tagsApi } from '@/api/categories'
 import { ingredientsApi }  from '@/api/ingredients'
 import { usersApi }        from '@/api/users'
+import { bloggerApplicationApi } from '@/api/bloggerApplications'
 import { uploadApi }       from '@/api/upload'
 import { useRouter }       from 'vue-router'
 import RecipeFormModal     from '@/components/recipe/RecipeFormModal.vue'
@@ -14,6 +15,7 @@ import ConfirmModal        from '@/components/ui/ConfirmModal.vue'
 import ImgUpload           from '@/components/ui/ImgUpload.vue'
 import { useToast }        from '@/composables/useToast'
 import { resolveImageUrl } from '@/utils/imageUrl'
+import { formatDate }      from '@/utils/formatDate'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -34,6 +36,7 @@ const activeTab = ref('recipes')
 // Lazy-load ingredients & users when tab is opened for the first time
 const ingLoaded   = ref(false)
 const usersLoaded = ref(false)
+const appsLoaded  = ref(false)
 watch(activeTab, (tab) => {
   if (tab === 'ingredients' && !ingLoaded.value) {
     loadIngredients()
@@ -42,6 +45,10 @@ watch(activeTab, (tab) => {
   if (tab === 'users' && !usersLoaded.value) {
     loadUsers()
     usersLoaded.value = true
+  }
+  if (tab === 'applications' && !appsLoaded.value) {
+    loadApplications()
+    appsLoaded.value = true
   }
 })
 
@@ -443,6 +450,77 @@ const unitLabel = (key) => units.label(key)
 
 const diffLabel = computed(() => ({ EASY: lang.t('common.easy'), MEDIUM: lang.t('common.medium'), HARD: lang.t('common.hard') }))
 const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
+
+// ── API: Blogger Arizalari ────────────────────────────────────────
+const applications    = ref([])
+const appPage         = ref(0)
+const appTotalPages   = ref(0)
+const appLoading      = ref(false)
+const appFilter       = ref('PENDING')   // 'PENDING' | 'ALL'
+const reviewingId     = ref(null)
+const rejectModalApp  = ref(null)        // rad etish modal uchun
+const rejectNote      = ref('')
+const reviewLoading   = ref(false)
+
+async function loadApplications() {
+  appLoading.value = true
+  try {
+    const res = appFilter.value === 'PENDING'
+      ? await bloggerApplicationApi.getPending(appPage.value, 20)
+      : await bloggerApplicationApi.getAll(appPage.value, 20)
+    const data = res.data?.data ?? res.data
+    applications.value  = data?.content ?? []
+    appTotalPages.value = data?.totalPages ?? 0
+  } finally { appLoading.value = false }
+}
+
+async function approveApp(app) {
+  reviewingId.value = app.id
+  try {
+    await bloggerApplicationApi.review(app.id, { approve: true })
+    toast.success(`${app.user.fullName || app.user.username} tasdiqlandi ✅`)
+    await loadApplications()
+  } catch (e) {
+    toast.error(e?.response?.data?.message ?? 'Xatolik')
+  } finally { reviewingId.value = null }
+}
+
+function openRejectModal(app) {
+  rejectModalApp.value = app
+  rejectNote.value = ''
+}
+
+async function confirmReject() {
+  if (!rejectModalApp.value) return
+  reviewLoading.value = true
+  try {
+    await bloggerApplicationApi.review(rejectModalApp.value.id, {
+      approve: false,
+      adminNote: rejectNote.value.trim() || undefined
+    })
+    toast.success('Ariza rad etildi')
+    rejectModalApp.value = null
+    await loadApplications()
+  } catch (e) {
+    toast.error(e?.response?.data?.message ?? 'Xatolik')
+  } finally { reviewLoading.value = false }
+}
+
+function appStatusLabel(status) {
+  return status === 'PENDING'   ? '⏳ Kutilmoqda'
+       : status === 'APPROVED'  ? '✅ Tasdiqlandi'
+       : status === 'CANCELLED' ? '🚪 O\'zi chiqdi'
+       : '❌ Rad etildi'
+}
+
+function appStatusClass(status) {
+  return status === 'PENDING'   ? 'app-status-pending'
+       : status === 'APPROVED'  ? 'app-status-approved'
+       : status === 'CANCELLED' ? 'app-status-cancelled'
+       : 'app-status-rejected'
+}
+
+// formatDate — src/utils/formatDate.ts dan import qilingan
 </script>
 
 <template>
@@ -492,6 +570,7 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
       <button @click="activeTab='tags'"        class="adm-tab" :class="{ 'adm-active': activeTab==='tags'        }">{{ lang.t('admin.tab_tags') }}</button>
       <button @click="activeTab='ingredients'" class="adm-tab" :class="{ 'adm-active': activeTab==='ingredients' }">{{ lang.t('admin.tab_ingredients') }}</button>
       <button @click="activeTab='users'"       class="adm-tab" :class="{ 'adm-active': activeTab==='users'       }">{{ lang.t('admin.tab_users') }}</button>
+      <button @click="activeTab='applications'" class="adm-tab" :class="{ 'adm-active': activeTab==='applications' }">👨‍🍳 Arizalar</button>
     </div>
 
     <!-- ══ RECIPES ══ -->
@@ -799,6 +878,120 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
         <button :disabled="userPage + 1 >= userTotalPages" @click="userPage++; loadUsers()" class="pg-btn">{{ lang.t('admin.next') }}</button>
       </div>
     </div>
+
+    <!-- ══ APPLICATIONS ══ -->
+    <div v-show="activeTab === 'applications'">
+
+      <!-- Filter toolbar -->
+      <div class="list-toolbar">
+        <div class="app-filter-btns">
+          <button :class="['app-filter-btn', appFilter==='PENDING' ? 'active' : '']"
+                  @click="appFilter='PENDING'; appPage=0; loadApplications()">
+            ⏳ Kutilmoqda
+          </button>
+          <button :class="['app-filter-btn', appFilter==='ALL' ? 'active' : '']"
+                  @click="appFilter='ALL'; appPage=0; loadApplications()">
+            📋 Barchasi
+          </button>
+        </div>
+        <span class="result-count">{{ applications.length }} ariza</span>
+      </div>
+
+      <!-- Skeleton -->
+      <div v-if="appLoading" class="skel-list">
+        <div v-for="i in 5" :key="i" class="skel-row" />
+      </div>
+
+      <!-- List -->
+      <div v-else-if="applications.length" class="app-list">
+        <div v-for="app in applications" :key="app.id" class="app-card">
+          <!-- User info -->
+          <div class="app-user">
+            <div class="user-avatar" style="width:40px;height:40px;font-size:15px;flex-shrink:0">
+              <img v-if="app.user?.avatarUrl" :src="app.user.avatarUrl" />
+              <span v-else class="user-avatar-letter">
+                {{ (app.user?.fullName || app.user?.username || '?')[0].toUpperCase() }}
+              </span>
+            </div>
+            <div class="app-user-info">
+              <div class="app-user-name">{{ app.user?.fullName || app.user?.username }}</div>
+              <div class="app-user-sub">@{{ app.user?.username }} · {{ formatDate(app.createdAt) }}</div>
+            </div>
+          </div>
+
+          <!-- Status -->
+          <span :class="['app-status', appStatusClass(app.status)]">
+            {{ appStatusLabel(app.status) }}
+          </span>
+
+          <!-- Admin note (agar bor bo'lsa) -->
+          <div v-if="app.adminNote" class="app-note">💬 {{ app.adminNote }}</div>
+
+          <!-- Reviewed by -->
+          <div v-if="app.reviewedBy" class="app-reviewed-by">
+            {{ formatDate(app.reviewedAt) }} — {{ app.reviewedBy.fullName || app.reviewedBy.username }} tomonidan ko'rildi
+          </div>
+
+          <!-- Actions (faqat PENDING uchun) -->
+          <div v-if="app.status === 'PENDING'" class="app-actions">
+            <button class="app-btn-approve" @click="approveApp(app)" :disabled="reviewingId === app.id">
+              <span v-if="reviewingId === app.id" class="spinner sm" />
+              <span v-else>✅ Tasdiqlash</span>
+            </button>
+            <button class="app-btn-reject" @click="openRejectModal(app)" :disabled="reviewingId === app.id">
+              ❌ Rad etish
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty -->
+      <div v-else class="empty-state">
+        <div class="empty-icon">📭</div>
+        <p class="empty-title">{{ appFilter === 'PENDING' ? 'Kutilayotgan ariza yo\'q' : 'Arizalar yo\'q' }}</p>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="appTotalPages > 1" class="ing-pagination">
+        <button :disabled="appPage === 0" @click="appPage--; loadApplications()" class="pg-btn">{{ lang.t('admin.prev') }}</button>
+        <span class="pg-info">{{ appPage + 1 }} / {{ appTotalPages }}</span>
+        <button :disabled="appPage + 1 >= appTotalPages" @click="appPage++; loadApplications()" class="pg-btn">{{ lang.t('admin.next') }}</button>
+      </div>
+    </div>
+
+    <!-- Rad etish modal -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="rejectModalApp" class="ing-modal-overlay" @click.self="rejectModalApp = null">
+          <div class="ing-modal" style="max-width:420px">
+            <div class="ing-modal-head">
+              <div class="ing-modal-icon">❌</div>
+              <div>
+                <h3 class="ing-modal-title">Arizani rad etish</h3>
+                <p class="ing-modal-sub">{{ rejectModalApp?.user?.fullName }}</p>
+              </div>
+              <button class="ing-modal-close" @click="rejectModalApp = null">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="ing-modal-body">
+              <div class="imf-group">
+                <label class="imf-label">Sabab (ixtiyoriy)</label>
+                <textarea v-model="rejectNote" class="imf-input" rows="3"
+                  placeholder="Nima uchun rad etilayotganini yozing..." style="resize:vertical" />
+              </div>
+            </div>
+            <div class="ing-modal-footer">
+              <button class="ing-modal-cancel" @click="rejectModalApp = null">Bekor qilish</button>
+              <button class="ing-modal-save" style="background:#ef4444" @click="confirmReject" :disabled="reviewLoading">
+                <span v-if="reviewLoading" class="spinner sm" />
+                <span v-else>❌ Rad etish</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- ══ USER EDIT MODAL ══ -->
     <Teleport to="body">
@@ -1377,4 +1570,53 @@ const diffMap   = { EASY: 'dt-easy', MEDIUM: 'dt-mid', HARD: 'dt-hard' }
   /* Tabs kichikroq */
   .adm-tab { padding: 8px 11px; font-size: 11px; }
 }
+
+/* ── APPLICATIONS ── */
+.app-filter-btns { display: flex; gap: 8px; }
+.app-filter-btn {
+  padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--tx-3);
+  cursor: pointer; transition: all 0.15s;
+}
+.app-filter-btn.active {
+  background: rgba(216,90,48,0.15); border-color: rgba(216,90,48,0.4); color: #E8713E;
+}
+
+.app-list { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+
+.app-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+}
+
+.app-user { display: flex; align-items: center; gap: 12px; }
+.app-user-name { font-size: 14px; font-weight: 800; color: var(--tx-1); }
+.app-user-sub  { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+
+.app-status {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; width: fit-content;
+}
+.app-status-pending   { background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+.app-status-approved  { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+.app-status-rejected  { background: rgba(239,68,68,0.1);   color: #f87171; border: 1px solid rgba(239,68,68,0.25); }
+.app-status-cancelled { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+
+.app-note { font-size: 12px; color: var(--tx-4); font-style: italic; }
+.app-reviewed-by { font-size: 11px; color: var(--tx-5); }
+
+.app-actions { display: flex; gap: 8px; margin-top: 4px; }
+.app-btn-approve {
+  flex: 1; padding: 9px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); color: #4ade80;
+  cursor: pointer; transition: all 0.15s;
+}
+.app-btn-approve:hover:not(:disabled) { background: rgba(34,197,94,0.22); }
+.app-btn-reject {
+  flex: 1; padding: 9px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #f87171;
+  cursor: pointer; transition: all 0.15s;
+}
+.app-btn-reject:hover:not(:disabled) { background: rgba(239,68,68,0.18); }
+.app-btn-approve:disabled, .app-btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

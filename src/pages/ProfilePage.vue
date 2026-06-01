@@ -8,10 +8,12 @@ import { uploadApi }                from '@/api/upload'
 import { mealPlansApi }             from '@/api/mealPlans'
 import { authApi }                  from '@/api/auth'
 import { usersApi }                 from '@/api/users'
+import { bloggerApplicationApi }    from '@/api/bloggerApplications'
 import RecipeCard                   from '@/components/recipe/RecipeCard.vue'
 import RecipeFormModal              from '@/components/recipe/RecipeFormModal.vue'
 import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }          from '@/utils/imageUrl'
+import { formatDate }              from '@/utils/formatDate'
 
 const auth      = useAuthStore()
 const lang      = useLangStore()
@@ -45,12 +47,12 @@ const pwError    = ref('')
 const pwSuccess  = ref(false)
 const pwSaving   = ref(false)
 
-// ── Blogger modal ─────────────────────────────────────────────────
-const showBloggerModal = ref(false)
-const termsScrolled    = ref(false)
-const bloggerLoading   = ref(false)
-const bloggerError     = ref('')
-const bloggerSuccess   = ref(false)
+// ── Blogger ariza modal ───────────────────────────────────────────
+const showBloggerModal  = ref(false)
+const bloggerLoading    = ref(false)
+const bloggerError      = ref('')
+const bloggerSuccess    = ref(false)
+const myApplication     = ref(null)   // null = tekshirilmagan, false = yo'q, object = bor
 
 // ── Computed ──────────────────────────────────────────────────────
 const roleLabel = computed(() => {
@@ -59,11 +61,7 @@ const roleLabel = computed(() => {
   return               { text: 'Foydalanuvchi',        icon: '👤', cls: 'role-user' }
 })
 
-const memberSince = computed(() => {
-  const d = auth.user?.createdAt
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('uz-UZ', { year: 'numeric', month: 'long' })
-})
+const memberSince = computed(() => formatDate(auth.user?.createdAt, 'month-year'))
 
 const statsData = computed(() => [
   { icon: '📝', val: recipes.value.length,    lbl: 'Retseptlar'   },
@@ -78,11 +76,21 @@ onMounted(async () => {
     const ps = [loadMealPlanCount()]
     if (auth.isBlogger) ps.push(loadMyRecipes())
     if (!favorites.loaded) ps.push(favorites.loadIds())
+    if (!auth.isBlogger && !auth.isAdmin) ps.push(loadMyApplication())
     await Promise.all(ps)
   } finally {
     loading.value = false
   }
 })
+
+async function loadMyApplication() {
+  try {
+    const res = await bloggerApplicationApi.getMyApplication()
+    myApplication.value = (res.data?.data ?? res.data) ?? false
+  } catch {
+    myApplication.value = false
+  }
+}
 
 async function loadMyRecipes() {
   try {
@@ -186,10 +194,24 @@ async function confirmDeleteRecipe() {
   finally  { deletingId.value = null }
 }
 
-// ── Oshpaz (Blogger) ──────────────────────────────────────────────
+// ── Oshpaz ariza ──────────────────────────────────────────────────
 function openBloggerModal() {
-  termsScrolled.value = false; bloggerError.value = ''; bloggerSuccess.value = false
+  bloggerError.value = ''; bloggerSuccess.value = false
   showBloggerModal.value = true
+}
+
+async function confirmBecomeBlogger() {
+  bloggerLoading.value = true; bloggerError.value = ''
+  try {
+    const res = await bloggerApplicationApi.apply()
+    myApplication.value = res.data?.data ?? res.data
+    bloggerSuccess.value = true
+    setTimeout(() => { showBloggerModal.value = false; bloggerSuccess.value = false }, 1800)
+  } catch (e) {
+    bloggerError.value = e?.response?.data?.message ?? 'Xatolik yuz berdi'
+  } finally {
+    bloggerLoading.value = false
+  }
 }
 
 // Oshpazlikdan chiqish
@@ -207,21 +229,6 @@ async function confirmLeaveOshpaz() {
     leaveError.value = e?.response?.data?.message || "Xatolik yuz berdi. Admin bilan bog'laning."
   } finally {
     leaveLoading.value = false
-  }
-}
-function onTermsScroll(e) {
-  const el = e.target
-  termsScrolled.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 20
-}
-async function confirmBecomeBlogger() {
-  bloggerLoading.value = true; bloggerError.value = ''
-  const err = await auth.becomeBlogger()
-  bloggerLoading.value = false
-  if (err) { bloggerError.value = err }
-  else {
-    bloggerSuccess.value = true
-    await auth.fetchUser()
-    setTimeout(() => { showBloggerModal.value = false; bloggerSuccess.value = false }, 1800)
   }
 }
 </script>
@@ -333,16 +340,32 @@ async function confirmBecomeBlogger() {
       </div>
 
       <!-- ── OSHPAZ BANNER (USER uchun) ── -->
-      <div v-if="!auth.isBlogger" class="blogger-cta" @click="openBloggerModal">
-        <div class="bcta-left">
-          <div class="bcta-emoji">👨‍🍳</div>
+      <template v-if="!auth.isBlogger && !auth.isAdmin">
+        <!-- Ariza yo'q — tugma ko'rsatiladi -->
+        <div v-if="!myApplication || myApplication.status === 'REJECTED'"
+             class="blogger-cta" @click="openBloggerModal">
+          <div class="bcta-left">
+            <div class="bcta-emoji">👨‍🍳</div>
+            <div>
+              <div class="bcta-title">Oshpaz bo'lish</div>
+              <div class="bcta-sub" v-if="myApplication?.status === 'REJECTED'">
+                Oldingi arizangiz rad etildi — qayta yuborishingiz mumkin
+              </div>
+              <div class="bcta-sub" v-else>Retseptlaringizni ulashing, hammaga ko'rsating</div>
+            </div>
+          </div>
+          <div class="bcta-arrow">›</div>
+        </div>
+
+        <!-- Ariza kutilmoqda -->
+        <div v-else-if="myApplication?.status === 'PENDING'" class="blogger-pending">
+          <span class="bp-icon">⏳</span>
           <div>
-            <div class="bcta-title">Oshpaz bo'lish</div>
-            <div class="bcta-sub">Retseptlaringizni ulashing, hammaga ko'rsating</div>
+            <div class="bp-title">Ariza ko'rib chiqilmoqda</div>
+            <div class="bp-sub">Admin tasdiqlagunicha kuting</div>
           </div>
         </div>
-        <div class="bcta-arrow">›</div>
-      </div>
+      </template>
 
       <!-- ── OSHPAZ ACTIVE (BLOGGER uchun) ── -->
       <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active">
@@ -433,7 +456,7 @@ async function confirmBecomeBlogger() {
               <div class="mh-icon">👨‍🍳</div>
               <div>
                 <div class="mh-title">Oshpaz bo'lish</div>
-                <div class="mh-sub">Shartlarni o'qib, tasdiqlang</div>
+                <div class="mh-sub">Ariza yuborasiz — admin ko'rib chiqadi</div>
               </div>
               <button class="modal-x" @click="showBloggerModal = false">✕</button>
             </div>
@@ -445,27 +468,18 @@ async function confirmBecomeBlogger() {
               <div class="perk">🏷️ Profilda "Oshpaz" belgisi</div>
             </div>
 
-            <div class="terms-scroll" @scroll="onTermsScroll">
-              <div class="terms-title">Foydalanish shartlari</div>
-              <ol class="terms-list">
-                <li>Yuklangan barcha kontent sizning mulkingiz — uni ulashishga huquqingiz bor.</li>
-                <li>Boshqalarning mualliflik huquqini buzuvchi kontent yuklab bo'lmaydi.</li>
-                <li>Retseptlar haqiqiy va sog'lom bo'lishi kerak.</li>
-                <li>Spam, haqoratli yoki zararli kontent man etiladi.</li>
-                <li>Qoidabuzarlik holatida oshpaz statusidan mahrum etilasiz.</li>
-                <li>Maxfiylik siyosatimizga to'liq rozilik bildirasiz.</li>
-              </ol>
-              <div v-if="!termsScrolled" class="terms-hint">↓ O'qishni davom eting</div>
+            <div class="apply-note">
+              Arizangiz admin tomonidan ko'rib chiqiladi — tez orada javob olasiz.
             </div>
 
             <div v-if="bloggerError" class="msg-error">{{ bloggerError }}</div>
-            <div v-if="bloggerSuccess" class="msg-ok">🎉 Tabriklaymiz! Siz endi Oshpazsiz!</div>
+            <div v-if="bloggerSuccess" class="msg-ok">✅ Ariza yuborildi! Javobni kuting.</div>
 
             <div class="modal-foot">
               <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">Bekor qilish</button>
-              <button @click="confirmBecomeBlogger" class="btn-confirm" :disabled="!termsScrolled || bloggerLoading">
+              <button @click="confirmBecomeBlogger" class="btn-confirm" :disabled="bloggerLoading">
                 <span v-if="bloggerLoading" class="spin" />
-                {{ bloggerLoading ? 'Saqlanmoqda...' : 'Qabul qilaman ✓' }}
+                {{ bloggerLoading ? 'Yuborilmoqda...' : '📨 Ariza yuborish' }}
               </button>
             </div>
           </div>
@@ -744,6 +758,28 @@ async function confirmBecomeBlogger() {
 .bcta-title { font-size: 15px; font-weight: 900; color: #E8713E; }
 .bcta-sub   { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
 .bcta-arrow { font-size: 24px; color: #E8713E; font-weight: 700; }
+
+/* ── BLOGGER PENDING ── */
+.blogger-pending {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(245,158,11,0.04));
+  border: 1px solid rgba(251,191,36,0.25); border-radius: 20px;
+}
+.bp-icon  { font-size: 28px; flex-shrink: 0; }
+.bp-title { font-size: 14px; font-weight: 800; color: #fbbf24; }
+.bp-sub   { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+
+/* ── APPLY NOTE ── */
+.apply-note {
+  margin: 0 24px 4px;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--tx-3);
+  line-height: 1.5;
+}
 
 /* ── BLOGGER ACTIVE ── */
 .blogger-active {

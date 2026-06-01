@@ -29,7 +29,7 @@ export const shoppingApi = {
     itemId: number,
     data:   ShoppingListItemStatusRequest,
   ): Promise<ListResponse> =>
-    api.patch(`/shopping-lists/${listId}/items/${itemId}`, data),
+    api.put(`/shopping-lists/${listId}/items/${itemId}`, data),
 
   delete: (id: number): Promise<AxiosResponse<void>> =>
     api.delete(`/shopping-lists/${id}`),

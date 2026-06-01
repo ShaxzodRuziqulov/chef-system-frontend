@@ -130,6 +130,7 @@ export interface RecipeCreateRequest {
   servings?:       number
   difficultyLevel?: DifficultyLevel
   imageUrl?:       string
+  imageUrls?:      string[]   // gallery rasmlari (max 10)
   videoUrl?:       string
   visible?:        boolean
   ingredients?:    RecipeIngredientRequest[]
