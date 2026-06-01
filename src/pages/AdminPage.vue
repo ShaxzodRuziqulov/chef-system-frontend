@@ -825,7 +825,7 @@ function appStatusClass(status) {
 
           <!-- Role badge -->
           <span :class="u.role === 'ADMIN' ? 'badge-admin' : u.role === 'BLOGGER' ? 'badge-blogger' : 'badge-user'">
-            {{ u.role === 'ADMIN' ? '👑 Admin' : u.role === 'BLOGGER' ? '👨‍🍳 Blogger' : '👤 User' }}
+            {{ u.role === 'ADMIN' ? '👑 Admin' : u.role === 'BLOGGER' ? '👨‍🍳 Oshpaz' : '👤 User' }}
           </span>
 
           <!-- Active badge -->
@@ -1049,7 +1049,7 @@ function appStatusClass(status) {
                       :class="['role-btn', userForm.role === 'BLOGGER' ? 'role-btn-active-blogger' : '']"
                       @click="userForm.role = 'BLOGGER'"
                       type="button"
-                    >👨‍🍳 Blogger</button>
+                    >👨‍🍳 Oshpaz</button>
                     <button
                       :class="['role-btn', userForm.role === 'ADMIN' ? 'role-btn-active-admin' : '']"
                       @click="userForm.role = 'ADMIN'"
