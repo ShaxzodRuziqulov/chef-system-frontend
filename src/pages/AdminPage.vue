@@ -521,6 +521,71 @@ function appStatusClass(status) {
 }
 
 // formatDate — src/utils/formatDate.ts dan import qilingan
+
+// ── Bulk Import ───────────────────────────────────────────────────
+const bulkModal       = ref(false)
+const bulkFile        = ref(null)
+const bulkFileName    = ref('')
+const bulkUploading   = ref(false)
+const bulkResult      = ref(null)   // BulkImportResultDto
+
+function openBulkModal() {
+  bulkFile.value    = null
+  bulkFileName.value = ''
+  bulkResult.value  = null
+  bulkModal.value   = true
+}
+
+function onBulkFileChange(e) {
+  const f = e.target.files?.[0]
+  if (!f) return
+  bulkFile.value     = f
+  bulkFileName.value = f.name
+  bulkResult.value   = null
+}
+
+function onBulkDrop(e) {
+  const f = e.dataTransfer.files?.[0]
+  if (!f) return
+  bulkFile.value     = f
+  bulkFileName.value = f.name
+  bulkResult.value   = null
+}
+
+async function submitBulkImport() {
+  if (!bulkFile.value) return
+  bulkUploading.value = true
+  bulkResult.value    = null
+  try {
+    const res = await recipesApi.bulkImport(bulkFile.value)
+    bulkResult.value = res.data?.data ?? res.data
+    if (bulkResult.value?.successCount > 0) {
+      toast.success(`${bulkResult.value.successCount} ta retsept yuklandi!`)
+      await loadRecipes()
+    }
+    if (bulkResult.value?.failedCount > 0) {
+      toast.error(`${bulkResult.value.failedCount} ta qatorda xatolik`)
+    }
+  } catch (e) {
+    toast.error(e?.response?.data?.message ?? 'Yuklashda xatolik')
+  } finally {
+    bulkUploading.value = false
+  }
+}
+
+async function downloadTemplate() {
+  try {
+    const res = await recipesApi.bulkImportTemplate()
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'retsept_shablon.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    toast.error('Shablonni yuklab bo\'lmadi')
+  }
+}
 </script>
 
 <template>
@@ -582,6 +647,10 @@ function appStatusClass(status) {
           <button v-if="search" @click="search=''" class="clear-btn">✕</button>
         </div>
         <span class="result-count">{{ filtered.length }} {{ lang.t('common.count') }}</span>
+        <button @click="openBulkModal" class="btn-bulk-import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          Excel
+        </button>
         <button @click="openCreateRecipe" class="btn-add-new">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/></svg>
           {{ lang.t('admin.add_recipe') }}
@@ -1170,6 +1239,102 @@ function appStatusClass(status) {
       </Transition>
     </Teleport>
 
+    <!-- ══ BULK IMPORT MODAL ══ -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="bulkModal" class="ing-modal-overlay" @click.self="bulkModal=false">
+          <div class="ing-modal bulk-modal">
+
+            <!-- Head -->
+            <div class="ing-modal-head">
+              <div class="ing-modal-icon">📥</div>
+              <div>
+                <h3 class="ing-modal-title">Excel orqali yuklash</h3>
+                <p class="ing-modal-sub">30–50 ta retseptni bir vaqtda qo'shing</p>
+              </div>
+              <button class="ing-modal-close" @click="bulkModal=false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div class="ing-modal-body">
+
+              <!-- Download template -->
+              <button class="bulk-template-btn" @click="downloadTemplate">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Shablonni yuklab olish (.xlsx)
+              </button>
+
+              <!-- Drop zone -->
+              <div
+                class="bulk-dropzone"
+                :class="{ 'bulk-dz-active': bulkFileName }"
+                @dragover.prevent
+                @drop.prevent="onBulkDrop"
+                @click="$refs.bulkFileInput.click()"
+              >
+                <input ref="bulkFileInput" type="file" accept=".xlsx" style="display:none" @change="onBulkFileChange" />
+                <div v-if="!bulkFileName" class="bulk-dz-hint">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="bulk-dz-icon"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  <span class="bulk-dz-text">Excel faylni bu yerga tashlang yoki bosing</span>
+                  <span class="bulk-dz-sub">.xlsx formati, maksimal 5 MB</span>
+                </div>
+                <div v-else class="bulk-dz-chosen">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px;height:20px;color:#4ade80;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="bulk-dz-fname">{{ bulkFileName }}</span>
+                  <button class="bulk-dz-clear" @click.stop="bulkFile=null; bulkFileName=''; bulkResult=null">✕</button>
+                </div>
+              </div>
+
+              <!-- Result table -->
+              <div v-if="bulkResult" class="bulk-result">
+                <div class="bulk-result-summary">
+                  <span class="brs-total">Jami: {{ bulkResult.totalRows }} qator</span>
+                  <span class="brs-ok">✅ {{ bulkResult.successCount }} muvaffaqiyatli</span>
+                  <span v-if="bulkResult.failedCount" class="brs-err">❌ {{ bulkResult.failedCount }} xatolik</span>
+                </div>
+                <div class="bulk-result-table">
+                  <div class="brt-head">
+                    <span>Qator</span>
+                    <span>Retsept</span>
+                    <span>Holat</span>
+                    <span>Xato</span>
+                  </div>
+                  <div
+                    v-for="row in bulkResult.results"
+                    :key="row.row"
+                    class="brt-row"
+                    :class="row.status === 'SUCCESS' ? 'brt-ok' : 'brt-fail'"
+                  >
+                    <span class="brt-num">#{{ row.row }}</span>
+                    <span class="brt-title">{{ row.titleUz || '—' }}</span>
+                    <span class="brt-status">{{ row.status === 'SUCCESS' ? '✅' : '❌' }}</span>
+                    <span class="brt-error">{{ row.error || '' }}</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="ing-modal-footer">
+              <button class="ing-modal-cancel" @click="bulkModal=false">Yopish</button>
+              <button
+                class="ing-modal-save"
+                @click="submitBulkImport"
+                :disabled="bulkUploading || !bulkFile"
+              >
+                <span v-if="bulkUploading" class="spinner sm" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                {{ bulkUploading ? 'Yuklanmoqda...' : 'Yuklash' }}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal" @close="showRecipeModal=false" @saved="handleRecipeSaved" />
 
     <ConfirmModal
@@ -1619,4 +1784,80 @@ function appStatusClass(status) {
 }
 .app-btn-reject:hover:not(:disabled) { background: rgba(239,68,68,0.18); }
 .app-btn-approve:disabled, .app-btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Bulk Import ── */
+.btn-bulk-import {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 42px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+  border-radius: 12px; color: #4ade80; font-size: 13px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+}
+.btn-bulk-import:hover { background: rgba(34,197,94,0.18); }
+.btn-bulk-import svg { width: 15px; height: 15px; }
+
+.bulk-modal { max-width: 600px; }
+
+.bulk-template-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 10px;
+  background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3);
+  color: #818cf8; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; width: fit-content; margin-bottom: 14px;
+}
+.bulk-template-btn:hover { background: rgba(99,102,241,0.2); }
+
+.bulk-dropzone {
+  border: 2px dashed var(--bd-md); border-radius: 14px;
+  min-height: 120px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: border-color 0.2s, background 0.2s;
+  background: var(--bg-input); padding: 20px;
+}
+.bulk-dropzone:hover, .bulk-dz-active { border-color: rgba(216,90,48,0.5); background: rgba(216,90,48,0.04); }
+
+.bulk-dz-hint { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; pointer-events: none; }
+.bulk-dz-icon { width: 36px; height: 36px; color: var(--tx-5); }
+.bulk-dz-text { font-size: 14px; font-weight: 700; color: var(--tx-3); }
+.bulk-dz-sub  { font-size: 12px; color: var(--tx-6); }
+
+.bulk-dz-chosen { display: flex; align-items: center; gap: 10px; width: 100%; }
+.bulk-dz-fname  { flex: 1; font-size: 14px; font-weight: 700; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bulk-dz-clear  {
+  width: 24px; height: 24px; border-radius: 6px; border: none;
+  background: var(--bd-lg); color: var(--tx-4); font-size: 11px;
+  cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}
+
+.bulk-result { margin-top: 16px; }
+.bulk-result-summary {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 10px; font-size: 13px; font-weight: 700;
+}
+.brs-total { color: var(--tx-4); }
+.brs-ok    { color: #4ade80; }
+.brs-err   { color: #f87171; }
+
+.bulk-result-table { border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+.brt-head {
+  display: grid; grid-template-columns: 50px 1fr 60px 1fr;
+  padding: 8px 12px; background: var(--bg-input);
+  font-size: 10px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em;
+  gap: 8px;
+}
+.brt-row {
+  display: grid; grid-template-columns: 50px 1fr 60px 1fr;
+  padding: 9px 12px; border-top: 1px solid var(--bd);
+  font-size: 12px; gap: 8px; align-items: center;
+}
+.brt-ok   { background: rgba(34,197,94,0.03); }
+.brt-fail { background: rgba(239,68,68,0.04); }
+.brt-num    { font-weight: 700; color: var(--tx-5); }
+.brt-title  { font-weight: 600; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brt-status { text-align: center; }
+.brt-error  { font-size: 11px; color: #f87171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 480px) {
+  .btn-bulk-import { padding: 0 10px; font-size: 12px; }
+  .brt-head, .brt-row { grid-template-columns: 40px 1fr 44px 1fr; }
+}
 </style>

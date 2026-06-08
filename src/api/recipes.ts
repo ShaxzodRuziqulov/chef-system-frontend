@@ -48,4 +48,15 @@ export const recipesApi = {
 
   incrementView: (id: number | string): Promise<AxiosResponse<void>> =>
     api.post(`/recipes/${id}/view`),
+
+  bulkImport: (file: File): Promise<AxiosResponse<any>> => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post('/admin/recipes/bulk-import', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
+  bulkImportTemplate: (): Promise<AxiosResponse<Blob>> =>
+    api.get('/admin/recipes/bulk-import/template', { responseType: 'blob' }),
 }
