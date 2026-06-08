@@ -915,7 +915,7 @@ function appStatusClass(status) {
             </div>
             <div class="app-user-info">
               <div class="app-user-name">{{ app.user?.fullName || app.user?.username }}</div>
-              <div class="app-user-sub">@{{ app.user?.username }} · {{ formatDate(app.createdAt) }}</div>
+              <div class="app-user-sub">@{{ app.user?.username }} · {{ formatDate(app.createdAt, 'short', lang.lang) }}</div>
             </div>
           </div>
 
@@ -929,7 +929,7 @@ function appStatusClass(status) {
 
           <!-- Reviewed by -->
           <div v-if="app.reviewedBy" class="app-reviewed-by">
-            {{ formatDate(app.reviewedAt) }} — {{ app.reviewedBy.fullName || app.reviewedBy.username }} tomonidan ko'rildi
+            {{ formatDate(app.reviewedAt, 'short', lang.lang) }} — {{ app.reviewedBy.fullName || app.reviewedBy.username }} tomonidan ko'rildi
           </div>
 
           <!-- Actions (faqat PENDING uchun) -->

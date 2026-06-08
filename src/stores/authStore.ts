@@ -198,9 +198,10 @@ export const useAuthStore = defineStore('auth', () => {
       // Foydalanuvchi ma'lumotlarini state + localStorage ga saqlash
       _persistUser(payload.user)
 
-      // Login bo'lganda default kun rejimini o'rnatish
-      localStorage.removeItem('oshpaz_theme')
-      document.documentElement.setAttribute('data-theme', 'light')
+      // Onboarding faqat birinchi login seansi uchun ko'rsatilsin
+      if (!localStorage.getItem('onboarding_dismissed_v1')) {
+        sessionStorage.setItem('show_onboarding', '1')
+      }
 
       // Login muvaffaqiyatli — redirect yoki Home (dashboard) ga yo'naltirish
       await router.push(redirectTo && redirectTo !== '/' ? redirectTo : { name: 'Home' })

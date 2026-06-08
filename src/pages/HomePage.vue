@@ -22,32 +22,32 @@ const onboardSteps = computed(() => [
   {
     id: 'browse',
     icon: '🔍',
-    title: 'Retseptlarni ko\'rish',
-    desc: 'Minglab retseptlar ichidan o\'zingizga mosini toping',
+    title: lang.t('home.step1_title'),
+    desc: lang.t('home.step1_desc'),
     to: '/app/recipes',
-    done: popular.value.length > 0,   // har doim true — retseptlar mavjud
+    done: popular.value.length > 0,
   },
   {
     id: 'favorite',
     icon: '❤️',
-    title: 'Sevimli retsept saqlang',
-    desc: 'Retsept kartasidagi yurak belgisini bosib saqlang',
+    title: lang.t('home.step2_title'),
+    desc: lang.t('home.step2_desc'),
     to: '/app/recipes',
     done: favorites.count > 0,
   },
   {
     id: 'mealplan',
     icon: '📅',
-    title: 'Haftalik reja tuzing',
-    desc: 'Hafta uchun nonushta, tushlik va kechki ovqatlarni rejalashtiring',
+    title: lang.t('home.step3_title'),
+    desc: lang.t('home.step3_desc'),
     to: '/app/meal-plans',
     done: todayMealsSorted.value.length > 0,
   },
   {
     id: 'shopping',
     icon: '🛒',
-    title: 'Xarid ro\'yxati yarating',
-    desc: 'Rejangizdan avtomatik ingredient ro\'yxatini oling',
+    title: lang.t('home.step4_title'),
+    desc: lang.t('home.step4_desc'),
     to: '/app/shopping-lists',
     done: hasShoppingLists.value,
   },
@@ -66,10 +66,17 @@ const showOnboarding = computed(() =>
 function dismissOnboarding() {
   onboardDismissed.value = true
   localStorage.setItem(ONBOARD_KEY, '1')
+  sessionStorage.removeItem('show_onboarding')
 }
 
 onMounted(() => {
-  if (localStorage.getItem(ONBOARD_KEY)) onboardDismissed.value = true
+  if (localStorage.getItem(ONBOARD_KEY)) {
+    onboardDismissed.value = true
+  } else if (!sessionStorage.getItem('show_onboarding')) {
+    onboardDismissed.value = true
+  } else {
+    sessionStorage.removeItem('show_onboarding')
+  }
 })
 
 // ── State ─────────────────────────────────────────────────────────
@@ -271,8 +278,8 @@ onMounted(async () => {
           <div class="onboard-title-wrap">
             <span class="onboard-wave">👋</span>
             <div>
-              <div class="onboard-title">Xush kelibsiz! Boshlash uchun 4 qadam</div>
-              <div class="onboard-sub">Har bir qadamni bajaring va ilovadan to'liq foydalaning</div>
+              <div class="onboard-title">{{ lang.t('home.onboard_title') }}</div>
+              <div class="onboard-sub">{{ lang.t('home.onboard_sub') }}</div>
             </div>
           </div>
           <div class="onboard-progress-wrap">
@@ -335,7 +342,7 @@ onMounted(async () => {
         <span class="stat-icon">📅</span>
         <div>
           <div class="stat-num">{{ loading ? '—' : (todayMealsSorted.length || '—') }}</div>
-          <div class="stat-label">Bugungi ovqat</div>
+          <div class="stat-label">{{ lang.t('home.today_stat') }}</div>
         </div>
       </RouterLink>
       <RouterLink to="/app/shopping-lists" class="stat-card stat-link">
@@ -361,12 +368,12 @@ onMounted(async () => {
               </svg>
             </div>
             <div>
-              <div class="today-label">Kunlik ovqat rejasi</div>
+              <div class="today-label">{{ lang.t('home.daily_plan') }}</div>
               <div class="today-date">{{ todayDateStr }}</div>
             </div>
           </div>
           <RouterLink to="/app/meal-plans" class="today-link">
-            Ko'rish
+            {{ lang.t('home.view') }}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
           </RouterLink>
         </div>
@@ -402,8 +409,8 @@ onMounted(async () => {
         <div v-else class="today-empty">
           <div class="today-empty-illo">📅</div>
           <div class="today-empty-body">
-            <span class="today-empty-title">Bugun uchun reja yo'q</span>
-            <RouterLink to="/app/meal-plans" class="today-empty-link">Reja tuzish →</RouterLink>
+            <span class="today-empty-title">{{ lang.t('home.no_today') }}</span>
+            <RouterLink to="/app/meal-plans" class="today-empty-link">{{ lang.t('home.make_plan') }}</RouterLink>
           </div>
         </div>
       </section>

@@ -68,7 +68,7 @@ function openForgot() {
 
 async function submitForgot() {
   if (!forgotInput.value.trim()) {
-    forgotError.value = 'Username yoki email kiriting'
+    forgotError.value = lang.t('auth.reset_empty')
     return
   }
   forgotLoading.value = true
@@ -239,8 +239,8 @@ onMounted(() => {
           <div class="fp-head">
             <div class="fp-icon">🔑</div>
             <div>
-              <div class="fp-title">Parolni tiklash</div>
-              <div class="fp-sub">Username yoki emailingizni kiriting</div>
+              <div class="fp-title">{{ lang.t('auth.reset_title') }}</div>
+              <div class="fp-sub">{{ lang.t('auth.reset_sub') }}</div>
             </div>
             <button class="fp-close" @click="showForgot = false">✕</button>
           </div>
@@ -255,7 +255,7 @@ onMounted(() => {
                 <input
                     v-model="forgotInput"
                     type="text"
-                    placeholder="username yoki email@example.com"
+                    :placeholder="lang.t('auth.reset_ph')"
                     class="fp-input"
                     @keyup.enter="submitForgot"
                 />
@@ -263,10 +263,10 @@ onMounted(() => {
               <p v-if="forgotError" class="fp-error">{{ forgotError }}</p>
             </div>
             <div class="fp-foot">
-              <button class="fp-cancel" @click="showForgot = false" :disabled="forgotLoading">Bekor qilish</button>
+              <button class="fp-cancel" @click="showForgot = false" :disabled="forgotLoading">{{ lang.t('common.cancel') }}</button>
               <button class="fp-submit" @click="submitForgot" :disabled="forgotLoading">
                 <span v-if="forgotLoading" class="fp-spin"/>
-                {{ forgotLoading ? 'Yuborilmoqda...' : 'Yuborish' }}
+                {{ forgotLoading ? lang.t('auth.reset_sending') : lang.t('auth.reset_send') }}
               </button>
             </div>
           </template>
@@ -274,12 +274,11 @@ onMounted(() => {
           <template v-else>
             <div class="fp-success">
               <div class="fp-ok-icon">✉️</div>
-              <div class="fp-ok-title">Yuborildi!</div>
+              <div class="fp-ok-title">{{ lang.t('auth.reset_sent') }}</div>
               <p class="fp-ok-text">
-                Agar <strong>{{ forgotInput }}</strong> tizimda ro'yxatga olingan bo'lsa,
-                parolni tiklash havolasi emailingizga yuboriladi.
+                Agar <strong>{{ forgotInput }}</strong> {{ lang.t('auth.reset_ok') }}
               </p>
-              <button class="fp-submit" @click="showForgot = false">Yopish</button>
+              <button class="fp-submit" @click="showForgot = false">{{ lang.t('auth.reset_close') }}</button>
             </div>
           </template>
 

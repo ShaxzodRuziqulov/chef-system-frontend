@@ -84,7 +84,7 @@ async function createPlan() {
     resetCreate()
     // Barcha rejalarni qayta yuklaymiz — eski rejaning statusi o'zgargan bo'lishi mumkin
     await load()
-    toast.success("Haftalik reja yaratildi!")
+    toast.success(lang.t('meal.created'))
   } catch (e) {
     createError.value = parseApiError(e, lang.t('common.error_save'))
   } finally {
@@ -117,7 +117,7 @@ async function saveEdit() {
     const idx = plans.value.findIndex(p => p.id === editPlanData.value.id)
     if (idx !== -1) plans.value[idx] = updated
     showEdit.value = false
-    toast.success("Reja yangilandi!")
+    toast.success(lang.t('meal.updated_ok'))
   } catch (e) {
     editError.value = parseApiError(e, lang.t('common.error_save'))
   } finally {
@@ -132,9 +132,9 @@ async function activate(id) {
     const updated = res.data?.data ?? res.data
     const idx = plans.value.findIndex(p => p.id === id)
     if (idx !== -1) plans.value[idx] = updated
-    toast.success("Reja faollashtirildi!")
+    toast.success(lang.t('meal.activated'))
   } catch (e) {
-    toast.error(parseApiError(e, "Faollashtirish xatosi"))
+    toast.error(parseApiError(e, lang.t('meal.activate_err')))
   }
 }
 
@@ -152,7 +152,7 @@ async function doDeletePlan() {
     await mealPlansApi.delete(id)
     plans.value = plans.value.filter(p => p.id !== id)
     if (expanded.value === id) expanded.value = null
-    toast.success("Reja o'chirildi!")
+    toast.success(lang.t('meal.deleted_ok'))
   } catch (e) {
     toast.error(parseApiError(e, lang.t('common.error_delete')))
   }
@@ -172,7 +172,7 @@ async function toggleExpand(plan) {
       const idx = plans.value.findIndex(p => p.id === plan.id)
       if (idx !== -1) plans.value[idx] = fullPlan
     } catch (e) {
-      toast.error(parseApiError(e, "Rejani yuklashda xato"))
+      toast.error(parseApiError(e, lang.t('meal.load_err')))
     }
   }
 }
@@ -192,7 +192,7 @@ function dayMonth(plan, i) {
   const start = new Date(plan.weekStartDate + 'T00:00:00')
   const d = new Date(start)
   d.setDate(start.getDate() + i)
-  const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
+  const months = lang.t('meal.months_short').split(',')
   return months[d.getMonth()]
 }
 
@@ -455,7 +455,7 @@ function entriesForDay(plan, dayName) {
 function formatDate(d) {
   if (!d) return ''
   const date = new Date(d + 'T00:00:00')
-  const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
+  const months = lang.t('meal.months_short').split(',')
   return `${date.getDate()} ${months[date.getMonth()]}`
 }
 

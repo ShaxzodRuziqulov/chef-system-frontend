@@ -110,7 +110,7 @@ function shareList(list) {
     const check = item.status === 'PURCHASED' ? '✅' : '▫️'
     text += `${check} ${iname} — ${amt}\n`
   }
-  text += `\n📱 Oshpaz ilovasidan`
+  text += `\n📱 ${lang.t('shop.from_app')}`
 
   const tgUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`
   window.open(tgUrl, '_blank')
@@ -152,7 +152,7 @@ function formatWeekRange(startDate) {
   const start = new Date(startDate + 'T00:00:00')
   const end = new Date(start)
   end.setDate(start.getDate() + 6)
-  const months = ['Yan','Fev','Mar','Apr','May','Iyun','Iyul','Avg','Sen','Okt','Noy','Dek']
+  const months = lang.t('meal.months_short').split(',')
   const s = `${start.getDate()} ${months[start.getMonth()]}`
   const e = `${end.getDate()} ${months[end.getMonth()]}`
   return `${s} — ${e}`
@@ -167,11 +167,11 @@ function weekRelativeLabel(list) {
   monday.setHours(0, 0, 0, 0)
   const planStart = new Date(plan.weekStartDate + 'T00:00:00')
   const diff = Math.round((planStart - monday) / (7 * 24 * 60 * 60 * 1000))
-  if (diff === 0)  return 'Bu hafta'
-  if (diff === 1)  return 'Keyingi hafta'
-  if (diff === -1) return "O'tgan hafta"
-  if (diff > 1)   return `${diff} hafta keyin`
-  return `${Math.abs(diff)} hafta oldin`
+  if (diff === 0)  return lang.t('shop.this_week')
+  if (diff === 1)  return lang.t('shop.next_week')
+  if (diff === -1) return lang.t('shop.last_week')
+  if (diff > 1)   return `${diff} ${lang.t('shop.weeks_later')}`
+  return `${Math.abs(diff)} ${lang.t('shop.weeks_ago')}`
 }
 
 // plan.updatedAt > list.generatedAt → reja ro'yxat yaratilgandan keyin o'zgardi

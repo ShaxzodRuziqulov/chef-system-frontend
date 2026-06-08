@@ -158,7 +158,9 @@ const videoProgress  = ref(0)
 const videoInput     = ref(null)
 
 function isLocalVideo(url) {
-  return url && (url.startsWith('/uploads/') || url.startsWith('http') && !url.includes('youtube') && !url.includes('vimeo'))
+  if (!url) return false
+  if (url.includes('youtube') || url.includes('youtu.be')) return false
+  return url.startsWith('/uploads/') || url.startsWith('http')
 }
 
 async function uploadVideoFile(file) {
@@ -335,7 +337,10 @@ async function save() {
   try {
     const payload = {
       ...form.value,
-      videoUrl:        form.value.videoUrl?.trim() || null,
+      // edit: bo'sh string = o'chirish signali; create: null yuborish yetarli
+      videoUrl: props.recipe
+        ? (form.value.videoUrl?.trim() ?? '')   // edit — bo'sh string backendga o'chirish signali
+        : (form.value.videoUrl?.trim() || null), // create — null = yo'q
       imageUrls:       form.value.imageUrls.filter(u => u?.trim()),
       categoryId:      form.value.categoryId ? Number(form.value.categoryId) : null,
       prepTimeMinutes: Number(form.value.prepTimeMinutes),
@@ -536,7 +541,7 @@ async function save() {
                 <div class="form-field span-2">
                   <label class="field-label">🎬 Video</label>
                   <div class="video-tabs">
-                    <button type="button" class="vtab" :class="{ 'vtab-active': videoMode === 'url' }" @click="videoMode = 'url'">🔗 Havola (YouTube/Vimeo)</button>
+                    <button type="button" class="vtab" :class="{ 'vtab-active': videoMode === 'url' }" @click="videoMode = 'url'">🔗 Havola</button>
                     <button type="button" class="vtab" :class="{ 'vtab-active': videoMode === 'file' }" @click="videoMode = 'file'">📁 Fayl yuklash</button>
                   </div>
                   <template v-if="videoMode === 'url'">
@@ -545,7 +550,7 @@ async function save() {
                       class="field-input"
                       placeholder="https://www.youtube.com/watch?v=..."
                     />
-                    <span class="field-hint">YouTube yoki Vimeo havolasini kiriting (ixtiyoriy)</span>
+                    <span class="field-hint">Faqat YouTube havolasi qo'llab-quvvatlanadi</span>
                   </template>
                   <template v-else>
                     <div class="video-upload-zone" @click="videoInput?.click()" @dragover.prevent @drop.prevent="onVideoDrop">

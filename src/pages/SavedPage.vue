@@ -87,16 +87,14 @@ watch(() => favorites.count, (newCount, oldCount) => {
     <!-- ── Empty state ────────────────────────────────────────── -->
     <div v-else-if="!loading && !recipes.length" class="empty-state">
       <div class="empty-icon">💔</div>
-      <h2 class="empty-title">Hali hech narsa saqlanmagan</h2>
-      <p class="empty-sub">
-        Retsept kartasidagi ❤️ tugmasini bosib, sevgan retseptlaringizni shu yerda saqlang
-      </p>
+      <h2 class="empty-title">{{ lang.t('saved.empty_title') }}</h2>
+      <p class="empty-sub">{{ lang.t('saved.empty_sub') }}</p>
       <RouterLink to="/app/recipes" class="empty-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
         </svg>
-        Retseptlarni ko'rish
+        {{ lang.t('saved.browse') }}
       </RouterLink>
     </div>
 
@@ -114,7 +112,7 @@ watch(() => favorites.count, (newCount, oldCount) => {
       <div v-if="page + 1 < totalPages" class="load-more-wrap">
         <button class="load-more-btn" :disabled="loading" @click="loadMore">
           <span v-if="loading" class="spin-icon">⏳</span>
-          <span v-else>Ko'proq yuklash</span>
+          <span v-else>{{ lang.t('saved.load_more') }}</span>
           <span class="load-hint">{{ recipes.length }} / {{ total }}</span>
         </button>
       </div>

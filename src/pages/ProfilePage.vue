@@ -36,9 +36,11 @@ const editForm        = ref({ fullName: '', avatarUrl: '' })
 const saveError       = ref('')
 const saveSuccess     = ref(false)
 const saving          = ref(false)
-const avatarPreview   = ref('')
-const avatarUploading = ref(false)
-const avatarInput     = ref(null)
+const avatarPreview      = ref('')
+const avatarUploading    = ref(false)
+const avatarInput        = ref(null)
+const quickAvatarInput   = ref(null)
+const showAvatarLightbox = ref(false)
 
 // ── Password ──────────────────────────────────────────────────────
 const showPwForm = ref(false)
@@ -61,12 +63,12 @@ const roleLabel = computed(() => {
   return               { text: 'Foydalanuvchi',        icon: '👤', cls: 'role-user' }
 })
 
-const memberSince = computed(() => formatDate(auth.user?.createdAt, 'month-year'))
+const memberSince = computed(() => formatDate(auth.user?.createdAt, 'month-year', lang.lang))
 
 const statsData = computed(() => [
-  { icon: '📝', val: recipes.value.length,    lbl: 'Retseptlar'   },
-  { icon: '❤️',  val: favorites.count,         lbl: 'Saqlangan'    },
-  { icon: '📅', val: mealPlanCount.value,     lbl: 'Meal planlar' },
+  { icon: '📝', val: recipes.value.length,    lbl: lang.t('profile.stat_recipes') },
+  { icon: '❤️',  val: favorites.count,         lbl: lang.t('profile.stat_saved')   },
+  { icon: '📅', val: mealPlanCount.value,     lbl: lang.t('profile.stat_meal')    },
 ])
 
 // ── Lifecycle ─────────────────────────────────────────────────────
@@ -117,6 +119,24 @@ function openEdit() {
   pwError.value    = ''
   pwSuccess.value  = false
   showEdit.value   = true
+}
+
+async function onQuickAvatarChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  avatarUploading.value = true
+  try {
+    const res = await uploadApi.image(file)
+    const url = res.data?.data?.url ?? res.data?.url
+    editForm.value.avatarUrl = url
+    await auth.updateProfile({ avatarUrl: url })
+    await auth.fetchUser()
+  } catch {
+    // upload yoki saqlash xatosi — jimgina o'tkazib yuborish
+  } finally {
+    avatarUploading.value = false
+    e.target.value = ''
+  }
 }
 
 async function onAvatarFileChange(e) {
@@ -269,13 +289,27 @@ async function confirmLeaveOshpaz() {
         <!-- Avatar zone -->
         <div class="hero-body">
           <div class="ava-zone">
-            <div class="ava-ring" :class="roleLabel.cls">
+            <div class="ava-ring" :class="[roleLabel.cls, { 'ava-uploading': avatarUploading }]"
+                 @click="showAvatarLightbox = true">
               <div class="ava-inner">
                 <img v-if="auth.avatarUrl" :src="resolveImageUrl(auth.avatarUrl)" alt="avatar"
                   @error="e => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }" />
                 <span :style="auth.avatarUrl ? 'display:none' : ''">{{ auth.initials }}</span>
+                <div class="ava-hover-overlay">
+                  <span v-if="avatarUploading" class="spin spin-white" />
+                  <template v-else>
+                    <!-- ko'rish ikonka -->
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="ava-cam-icon">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="ava-overlay-text">{{ lang.t('profile.view_avatar') }}</span>
+                  </template>
+                </div>
               </div>
             </div>
+            <input ref="quickAvatarInput" type="file" accept="image/*" style="display:none" @change="onQuickAvatarChange" />
             <div class="role-pill" :class="roleLabel.cls">
               {{ roleLabel.icon }} {{ roleLabel.text }}
             </div>
@@ -283,7 +317,7 @@ async function confirmLeaveOshpaz() {
 
           <!-- Name & meta -->
           <div class="hero-meta">
-            <h1 class="hero-name">{{ auth.user.fullName || auth.user.username || 'Foydalanuvchi' }}</h1>
+            <h1 class="hero-name">{{ auth.user.fullName || auth.user.username || lang.t('profile.user') }}</h1>
             <div v-if="auth.user.username || memberSince" class="hero-sub-row">
               <span v-if="auth.user.username" class="meta-chip">@{{ auth.user.username }}</span>
               <span v-if="memberSince" class="meta-chip">📅 {{ memberSince }}</span>
@@ -302,11 +336,11 @@ async function confirmLeaveOshpaz() {
           <div class="hero-actions">
             <button @click="openEdit" class="btn-action btn-primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-              Profilni tahrirlash
+              {{ lang.t('profile.edit') }}
             </button>
             <button @click="auth.logout()" class="btn-action btn-danger">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-              Chiqish
+              {{ lang.t('profile.logout') }}
             </button>
           </div>
         </div>
@@ -331,7 +365,7 @@ async function confirmLeaveOshpaz() {
         <div class="info-row">
           <div class="info-icon">🛡️</div>
           <div class="info-body">
-            <div class="info-lbl">Rol</div>
+            <div class="info-lbl">{{ lang.t('profile.role') }}</div>
             <div class="info-val">
               <span class="role-badge" :class="roleLabel.cls">{{ roleLabel.icon }} {{ roleLabel.text }}</span>
             </div>
@@ -347,11 +381,11 @@ async function confirmLeaveOshpaz() {
           <div class="bcta-left">
             <div class="bcta-emoji">👨‍🍳</div>
             <div>
-              <div class="bcta-title">Oshpaz bo'lish</div>
+              <div class="bcta-title">{{ lang.t('profile.become_chef') }}</div>
               <div class="bcta-sub" v-if="myApplication?.status === 'REJECTED'">
-                Oldingi arizangiz rad etildi — qayta yuborishingiz mumkin
+                {{ lang.t('profile.rejected_sub') }}
               </div>
-              <div class="bcta-sub" v-else>Retseptlaringizni ulashing, hammaga ko'rsating</div>
+              <div class="bcta-sub" v-else>{{ lang.t('profile.chef_sub') }}</div>
             </div>
           </div>
           <div class="bcta-arrow">›</div>
@@ -361,8 +395,8 @@ async function confirmLeaveOshpaz() {
         <div v-else-if="myApplication?.status === 'PENDING'" class="blogger-pending">
           <span class="bp-icon">⏳</span>
           <div>
-            <div class="bp-title">Ariza ko'rib chiqilmoqda</div>
-            <div class="bp-sub">Admin tasdiqlagunicha kuting</div>
+            <div class="bp-title">{{ lang.t('profile.pending_title') }}</div>
+            <div class="bp-sub">{{ lang.t('profile.pending_sub') }}</div>
           </div>
         </div>
       </template>
@@ -371,25 +405,25 @@ async function confirmLeaveOshpaz() {
       <div v-else-if="auth.role === 'BLOGGER'" class="blogger-active">
         <span class="ba-icon">✅</span>
         <div>
-          <div class="ba-title">Tasdiqlangan Oshpaz</div>
-          <div class="ba-sub">Retseptlaringizni qo'shing va barchaga ko'rsating</div>
+          <div class="ba-title">{{ lang.t('profile.active_chef') }}</div>
+          <div class="ba-sub">{{ lang.t('profile.active_sub') }}</div>
         </div>
-        <button class="ba-leave-btn" @click.stop="showLeaveModal = true" title="Oshpazlikdan chiqish">
+        <button class="ba-leave-btn" @click.stop="showLeaveModal = true" :title="lang.t('profile.leave_title')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
           </svg>
-          Chiqish
+          {{ lang.t('profile.logout') }}
         </button>
       </div>
 
       <!-- ── BLOGGER RETSEPTLARI ── -->
       <div v-if="auth.isBlogger" class="section">
         <div class="section-head">
-          <h2 class="section-title">Mening retseptlarim</h2>
+          <h2 class="section-title">{{ lang.t('profile.my_recipes') }}</h2>
           <button @click="openCreateRecipe" class="btn-add">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
-            Qo'shish
+            {{ lang.t('common.add') }}
           </button>
         </div>
 
@@ -410,22 +444,22 @@ async function confirmLeaveOshpaz() {
 
         <div v-else class="empty-box">
           <div class="empty-emoji">📝</div>
-          <div class="empty-title">Hali retsept yo'q</div>
-          <div class="empty-sub">Birinchi retseptingizni qo'shing!</div>
-          <button @click="openCreateRecipe" class="btn-empty">+ Retsept qo'shish</button>
+          <div class="empty-title">{{ lang.t('profile.no_recipes_title') }}</div>
+          <div class="empty-sub">{{ lang.t('profile.no_recipes_sub') }}</div>
+          <button @click="openCreateRecipe" class="btn-empty">{{ lang.t('profile.add_recipe') }}</button>
         </div>
       </div>
 
       <!-- ── USER EMPTY STATE ── -->
       <div v-else class="section">
         <div class="section-head">
-          <h2 class="section-title">💾 Saqlangan retseptlar</h2>
+          <h2 class="section-title">💾 {{ lang.t('home.saved') }}</h2>
         </div>
         <div class="upgrade-box">
           <div class="ub-emoji">🍳</div>
-          <div class="ub-title">O'z retseptingizni ulashmoqchimisiz?</div>
-          <div class="ub-sub">Oshpaz bo'ling — retseptlar qo'shing, hammaga ko'rsating</div>
-          <button @click="openBloggerModal" class="btn-upgrade">👨‍🍳 Oshpaz bo'lish</button>
+          <div class="ub-title">{{ lang.t('profile.share_cta') }}</div>
+          <div class="ub-sub">{{ lang.t('profile.share_sub') }}</div>
+          <button @click="openBloggerModal" class="btn-upgrade">{{ lang.t('profile.become_btn') }}</button>
         </div>
       </div>
 
@@ -441,7 +475,7 @@ async function confirmLeaveOshpaz() {
     <ConfirmModal
       :show="showDeleteModal"
       :message="lang.t('common.confirm_delete')"
-      confirm-label="Ha, o'chirish"
+      :confirm-label="lang.t('profile.confirm_del')"
       :danger="true"
       @confirm="confirmDeleteRecipe"
       @cancel="showDeleteModal = false"
@@ -455,31 +489,31 @@ async function confirmLeaveOshpaz() {
             <div class="modal-head">
               <div class="mh-icon">👨‍🍳</div>
               <div>
-                <div class="mh-title">Oshpaz bo'lish</div>
-                <div class="mh-sub">Ariza yuborasiz — admin ko'rib chiqadi</div>
+                <div class="mh-title">{{ lang.t('profile.become_chef') }}</div>
+                <div class="mh-sub">{{ lang.t('profile.blogger_sub') }}</div>
               </div>
               <button class="modal-x" @click="showBloggerModal = false">✕</button>
             </div>
 
             <div class="blogger-perks">
-              <div class="perk">📝 Retsept qo'shish va tahrirlash</div>
-              <div class="perk">🌍 Retseptlar barcha foydalanuvchilarga ko'rinadi</div>
-              <div class="perk">📊 Ko'rishlar va baholarni kuzatish</div>
-              <div class="perk">🏷️ Profilda "Oshpaz" belgisi</div>
+              <div class="perk">{{ lang.t('profile.perk1') }}</div>
+              <div class="perk">{{ lang.t('profile.perk2') }}</div>
+              <div class="perk">{{ lang.t('profile.perk3') }}</div>
+              <div class="perk">{{ lang.t('profile.perk4') }}</div>
             </div>
 
             <div class="apply-note">
-              Arizangiz admin tomonidan ko'rib chiqiladi — tez orada javob olasiz.
+              {{ lang.t('profile.apply_note') }}
             </div>
 
             <div v-if="bloggerError" class="msg-error">{{ bloggerError }}</div>
-            <div v-if="bloggerSuccess" class="msg-ok">✅ Ariza yuborildi! Javobni kuting.</div>
+            <div v-if="bloggerSuccess" class="msg-ok">{{ lang.t('profile.apply_success') }}</div>
 
             <div class="modal-foot">
-              <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">Bekor qilish</button>
+              <button @click="showBloggerModal = false" class="btn-ghost" :disabled="bloggerLoading">{{ lang.t('common.cancel') }}</button>
               <button @click="confirmBecomeBlogger" class="btn-confirm" :disabled="bloggerLoading">
                 <span v-if="bloggerLoading" class="spin" />
-                {{ bloggerLoading ? 'Yuborilmoqda...' : '📨 Ariza yuborish' }}
+                {{ bloggerLoading ? lang.t('profile.applying') : lang.t('profile.apply_btn') }}
               </button>
             </div>
           </div>
@@ -493,30 +527,60 @@ async function confirmLeaveOshpaz() {
             <div class="modal-head">
               <div class="mh-icon mh-icon-warn">⚠️</div>
               <div>
-                <div class="mh-title">Oshpazlikdan chiqish</div>
-                <div class="mh-sub">Bu amalni tasdiqlaysizmi?</div>
+                <div class="mh-title">{{ lang.t('profile.leave_title') }}</div>
+                <div class="mh-sub">{{ lang.t('profile.leave_confirm') }}</div>
               </div>
               <button class="modal-x" @click="showLeaveModal = false">✕</button>
             </div>
 
             <div class="leave-info">
-              <p>Oshpaz statusidan chiqqach:</p>
+              <p>{{ lang.t('profile.leave_info') }}</p>
               <ul>
-                <li>Yangi retsept qo'sha olmaysiz</li>
-                <li>Mavjud retseptlaringiz saqlanib qoladi</li>
-                <li>Xohlasangiz yana Oshpaz bo'lishingiz mumkin</li>
+                <li>{{ lang.t('profile.leave_li1') }}</li>
+                <li>{{ lang.t('profile.leave_li2') }}</li>
+                <li>{{ lang.t('profile.leave_li3') }}</li>
               </ul>
             </div>
 
             <div v-if="leaveError" class="msg-error">{{ leaveError }}</div>
 
             <div class="modal-foot">
-              <button @click="showLeaveModal = false" class="btn-ghost" :disabled="leaveLoading">Bekor qilish</button>
+              <button @click="showLeaveModal = false" class="btn-ghost" :disabled="leaveLoading">{{ lang.t('common.cancel') }}</button>
               <button @click="confirmLeaveOshpaz" class="btn-leave" :disabled="leaveLoading">
                 <span v-if="leaveLoading" class="spin" />
-                {{ leaveLoading ? 'Saqlanmoqda...' : 'Ha, chiqaman' }}
+                {{ leaveLoading ? lang.t('profile.leaving') : lang.t('profile.leave_btn') }}
               </button>
             </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Avatar lightbox -->
+    <Teleport to="body">
+      <Transition name="lb-fade">
+        <div v-if="showAvatarLightbox" class="lb-overlay" @click.self="showAvatarLightbox = false">
+          <div class="lb-box">
+            <button class="lb-close" @click="showAvatarLightbox = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <div class="lb-avatar" :class="roleLabel.cls">
+              <img v-if="auth.avatarUrl" :src="resolveImageUrl(auth.avatarUrl)" alt="avatar"
+                @error="e => { e.target.style.display='none'; e.target.nextElementSibling.style.display='flex' }" />
+              <span v-else class="lb-initials">{{ auth.initials }}</span>
+            </div>
+            <div class="lb-name">{{ auth.user?.fullName || auth.user?.username }}</div>
+            <button class="lb-change-btn"
+                    :disabled="avatarUploading"
+                    @click="showAvatarLightbox = false; quickAvatarInput?.click()">
+              <span v-if="avatarUploading" class="spin" />
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                <circle stroke-linecap="round" stroke-linejoin="round" stroke-width="2" cx="12" cy="13" r="4"/>
+              </svg>
+              {{ lang.t('profile.change_photo') }}
+            </button>
           </div>
         </div>
       </Transition>
@@ -529,7 +593,7 @@ async function confirmLeaveOshpaz() {
           <div class="modal-box">
             <div class="modal-head">
               <div class="mh-icon">✏️</div>
-              <div class="mh-title">Profilni tahrirlash</div>
+              <div class="mh-title">{{ lang.t('profile.edit') }}</div>
               <button class="modal-x" @click="showEdit = false">✕</button>
             </div>
 
@@ -543,40 +607,40 @@ async function confirmLeaveOshpaz() {
                   <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:22px;height:22px;color:#fff"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16v2a2 2 0 002 2h14a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12"/></svg>
                 </div>
               </div>
-              <div class="au-hint">Rasm o'zgartirish · JPG, PNG, max 5MB</div>
+              <div class="au-hint">{{ lang.t('profile.avatar_sub') }}</div>
               <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="onAvatarFileChange" />
 
               <div class="form-group">
-                <label class="form-lbl">To'liq ism</label>
-                <input v-model="editForm.fullName" type="text" class="form-inp" placeholder="Ismingizni kiriting" />
+                <label class="form-lbl">{{ lang.t('profile.full_name') }}</label>
+                <input v-model="editForm.fullName" type="text" class="form-inp" :placeholder="lang.t('profile.name_ph')" />
               </div>
 
               <div v-if="saveError" class="msg-error">{{ saveError }}</div>
-              <div v-if="saveSuccess" class="msg-ok">✓ Saqlandi!</div>
+              <div v-if="saveSuccess" class="msg-ok">{{ lang.t('profile.saved_msg') }}</div>
 
               <!-- Password toggle -->
               <div class="pw-section">
                 <button class="pw-toggle" @click="showPwForm = !showPwForm" type="button">
-                  🔑 Parolni o'zgartirish
+                  {{ lang.t('profile.pw_change') }}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" :style="`width:16px;height:16px;transition:.2s;transform:rotate(${showPwForm?180:0}deg)`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                 </button>
                 <div v-if="showPwForm" class="pw-fields">
-                  <input v-model="pwForm.currentPassword" type="password" class="form-inp" placeholder="Joriy parol" />
-                  <input v-model="pwForm.newPassword"     type="password" class="form-inp" placeholder="Yangi parol" />
-                  <input v-model="pwForm.confirmPassword" type="password" class="form-inp" placeholder="Yangi parolni tasdiqlang" />
+                  <input v-model="pwForm.currentPassword" type="password" class="form-inp" :placeholder="lang.t('profile.pw_current')" />
+                  <input v-model="pwForm.newPassword"     type="password" class="form-inp" :placeholder="lang.t('profile.pw_new')" />
+                  <input v-model="pwForm.confirmPassword" type="password" class="form-inp" :placeholder="lang.t('profile.pw_confirm')" />
                   <div v-if="pwError"   class="msg-error">{{ pwError }}</div>
-                  <div v-if="pwSuccess" class="msg-ok">✓ Parol yangilandi!</div>
+                  <div v-if="pwSuccess" class="msg-ok">{{ lang.t('profile.pw_saved_msg') }}</div>
                   <button @click="savePassword" :disabled="pwSaving" class="btn-pw-save">
-                    <span v-if="pwSaving" class="spin" /> Parolni saqlash
+                    <span v-if="pwSaving" class="spin" /> {{ lang.t('profile.pw_save') }}
                   </button>
                 </div>
               </div>
             </div>
 
             <div class="modal-foot">
-              <button @click="showEdit = false" class="btn-ghost" :disabled="saving">Bekor qilish</button>
+              <button @click="showEdit = false" class="btn-ghost" :disabled="saving">{{ lang.t('common.cancel') }}</button>
               <button @click="saveProfile" class="btn-save" :disabled="saving">
-                <span v-if="saving" class="spin" />{{ saving ? 'Saqlanmoqda...' : 'Saqlash' }}
+                <span v-if="saving" class="spin" />{{ saving ? lang.t('common.saving') : lang.t('common.save') }}
               </button>
             </div>
           </div>
@@ -588,7 +652,7 @@ async function confirmLeaveOshpaz() {
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin: 0 auto; padding-bottom: 40px; }
+.page { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 720px; margin: 0 auto; padding-bottom: 40px; }
 
 /* ── SKELETON ── */
 .skel-page  { display: flex; flex-direction: column; gap: 14px; }
@@ -648,7 +712,10 @@ async function confirmLeaveOshpaz() {
   border: 4px solid var(--bg-card);
   box-shadow: 0 8px 28px rgba(0,0,0,0.45);
   flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
+.ava-ring:hover { transform: scale(1.05); box-shadow: 0 14px 36px rgba(0,0,0,0.6); }
 .ava-ring.role-admin   { background: linear-gradient(135deg, #fbbf24, #d97706); }
 .ava-ring.role-blogger { background: linear-gradient(135deg, #D85A30, #f97316); }
 .ava-ring.role-user    { background: linear-gradient(135deg, #3b82f6, #6366f1); }
@@ -658,8 +725,35 @@ async function confirmLeaveOshpaz() {
   background: linear-gradient(135deg, #1a2a1a, #0f1e2a);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
   font-size: 30px; font-weight: 900; color: #fff;
+  position: relative;
 }
 .ava-inner img { width: 100%; height: 100%; object-fit: cover; }
+
+.ava-hover-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.52);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: inherit;
+}
+.ava-ring:hover .ava-hover-overlay,
+.ava-ring.ava-uploading .ava-hover-overlay { opacity: 1; }
+
+.ava-cam-icon { width: 22px; height: 22px; color: #fff; }
+.ava-overlay-text {
+  font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.9);
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+.spin-white {
+  display: inline-block;
+  width: 22px; height: 22px;
+  border: 2.5px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: rot .7s linear infinite;
+}
 
 .role-pill {
   padding: 5px 13px; border-radius: 20px;
@@ -1060,6 +1154,69 @@ async function confirmLeaveOshpaz() {
   border-radius: 50%; animation: rot 0.7s linear infinite;
 }
 @keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── Avatar Lightbox ── */
+.lb-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  background: rgba(0,0,0,0.78);
+  backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+}
+.lb-box {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 16px; padding: 32px 28px 28px;
+  position: relative;
+}
+.lb-close {
+  position: absolute; top: 0; right: 0;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: none; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.lb-close:hover { background: rgba(255,255,255,0.2); }
+.lb-close svg { width: 16px; height: 16px; }
+
+.lb-avatar {
+  width: 200px; height: 200px; border-radius: 40px;
+  padding: 4px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.lb-avatar.role-admin   { background: linear-gradient(135deg, #fbbf24, #d97706); }
+.lb-avatar.role-blogger { background: linear-gradient(135deg, #D85A30, #f97316); }
+.lb-avatar.role-user    { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+.lb-avatar img {
+  width: 100%; height: 100%; object-fit: cover;
+  border-radius: 36px;
+}
+.lb-initials {
+  width: 100%; height: 100%; border-radius: 36px;
+  background: linear-gradient(135deg, #1a2a1a, #0f1e2a);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 64px; font-weight: 900; color: #fff;
+}
+.lb-name {
+  font-size: 17px; font-weight: 800; color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.lb-change-btn {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 22px; border-radius: 24px;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: background 0.15s;
+}
+.lb-change-btn:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
+.lb-change-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Lightbox transition */
+.lb-fade-enter-active { transition: all 0.22s ease; }
+.lb-fade-leave-active { transition: all 0.18s ease; }
+.lb-fade-enter-from, .lb-fade-leave-to { opacity: 0; }
+.lb-fade-enter-from .lb-box, .lb-fade-leave-to .lb-box { transform: scale(0.92); }
 
 /* Modal transition */
 .mfade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }

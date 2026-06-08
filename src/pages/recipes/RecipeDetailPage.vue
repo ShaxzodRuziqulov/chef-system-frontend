@@ -35,20 +35,19 @@ function scrollToVideo() {
   document.getElementById('recipe-video')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+// YouTube embed — iframe orqali ishlaydi
 function getEmbedUrl(url) {
   if (!url) return null
-  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/)
   if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}`
   if (url.includes('youtube.com/embed/')) return url
-  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/)
-  if (vimeoMatch) return `https://player.vimeo.com/video/${vimeoMatch[1]}`
-  if (url.includes('player.vimeo.com/video/')) return url
   return null
 }
 
 function isLocalVideo(url) {
   if (!url) return false
-  return url.startsWith('/uploads/') || (!url.includes('youtube') && !url.includes('vimeo') && !url.includes('youtu.be'))
+  if (url.includes('youtube') || url.includes('youtu.be')) return false
+  return url.startsWith('/uploads/') || url.startsWith('http')
 }
 
 // ── Modal / actions ───────────────────────────────────────────────
@@ -319,7 +318,7 @@ onMounted(async () => {
     </div>
 
     <div v-if="recipe.videoUrl" id="recipe-video" class="video-wrap">
-      <!-- Local uploaded video -->
+      <!-- Mahalliy yuklangan video -->
       <video
         v-if="isLocalVideo(recipe.videoUrl)"
         class="video-iframe"
@@ -327,7 +326,7 @@ onMounted(async () => {
         preload="metadata"
         :src="recipe.videoUrl"
       />
-      <!-- YouTube / Vimeo embed -->
+      <!-- YouTube embed (iframe ishlaydi) -->
       <iframe
         v-else-if="getEmbedUrl(recipe.videoUrl)"
         :src="getEmbedUrl(recipe.videoUrl)"
@@ -469,11 +468,11 @@ onMounted(async () => {
     <!-- ─── Locked panel (guest) ─── -->
     <div v-if="!auth.isAuthenticated && LOCKED_TABS.includes(tab)" class="tab-content locked-panel">
       <div class="lp-icon">🔒</div>
-      <h3 class="lp-title">Tizimga kiring</h3>
-      <p class="lp-desc">Pishirish bosqichlari, ozuqa ma'lumotlari va izohlarni ko'rish uchun ro'yxatdan o'ting</p>
+      <h3 class="lp-title">{{ lang.t('recipe.login_title') }}</h3>
+      <p class="lp-desc">{{ lang.t('recipe.login_desc') }}</p>
       <div class="lp-btns">
-        <RouterLink to="/login"    class="lp-btn-primary">Kirish</RouterLink>
-        <RouterLink to="/register" class="lp-btn-ghost">Bepul ro'yxatdan o'tish</RouterLink>
+        <RouterLink to="/login"    class="lp-btn-primary">{{ lang.t('recipe.login_btn') }}</RouterLink>
+        <RouterLink to="/register" class="lp-btn-ghost">{{ lang.t('recipe.register_btn') }}</RouterLink>
       </div>
     </div>
 
@@ -537,14 +536,14 @@ onMounted(async () => {
             @keydown.ctrl.enter="submitComment"
           />
           <div class="cf-actions">
-            <span v-if="auth.isAuthenticated" class="cf-hint">Ctrl+Enter — yuborish</span>
+            <span v-if="auth.isAuthenticated" class="cf-hint">{{ lang.t('recipe.ctrl_enter') }}</span>
             <button
               class="cf-submit"
               :disabled="auth.isAuthenticated ? (!newComment.trim() || submitting) : false"
               @click="submitComment"
             >
               <span v-if="submitting" class="act-spinner" />
-              <span v-else>{{ auth.isAuthenticated ? 'Yuborish' : '🔒 Kirish' }}</span>
+              <span v-else>{{ auth.isAuthenticated ? lang.t('auth.reset_send') : `🔒 ${lang.t('auth.login_btn')}` }}</span>
             </button>
           </div>
         </div>
@@ -558,7 +557,7 @@ onMounted(async () => {
       <template v-else>
         <div v-if="comments.length === 0 && !commentsLoad" class="tab-empty">
           <div class="te-icon">💬</div>
-          <p>Hali izoh qoldirilmagan. Birinchi bo'ling!</p>
+          <p>{{ lang.t('recipe.no_comments') }}</p>
         </div>
 
         <div v-for="c in comments" :key="c.id" class="comment-item">
@@ -566,7 +565,7 @@ onMounted(async () => {
           <div class="ci-body">
             <div class="ci-header">
               <span class="ci-name">{{ c.userName }}</span>
-              <span class="ci-time">{{ formatDate(c.createdAt) }}</span>
+              <span class="ci-time">{{ formatDate(c.createdAt, 'short', lang.lang) }}</span>
             </div>
             <p class="ci-text">{{ c.content }}</p>
           </div>
@@ -591,7 +590,7 @@ onMounted(async () => {
           @click="loadComments(false)"
         >
           <span v-if="commentsLoad" class="act-spinner" />
-          <span v-else>Ko'proq ko'rsatish</span>
+          <span v-else>{{ lang.t('recipe.show_more') }}</span>
         </button>
       </template>
     </div>
@@ -1238,6 +1237,25 @@ onMounted(async () => {
   0%, 100% { opacity: 0.5; }
   50%       { opacity: 1; }
 }
+
+/* ── External video card (Instagram / TikTok) ── */
+.ext-video-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 24px;
+  background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px;
+}
+.ext-video-icon { font-size: 36px; flex-shrink: 0; }
+.ext-video-info { flex: 1; }
+.ext-video-name { font-size: 15px; font-weight: 800; color: var(--tx-1); }
+.ext-video-sub  { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
+.ext-video-btn {
+  padding: 10px 20px; border-radius: 12px;
+  background: #E8713E; color: white;
+  font-size: 13px; font-weight: 800;
+  text-decoration: none; white-space: nowrap;
+  transition: background 0.15s;
+}
+.ext-video-btn:hover { background: #d4622f; }
 
 /* ── Play button ── */
 .play-btn {
