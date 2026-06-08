@@ -528,12 +528,14 @@ const bulkFile        = ref(null)
 const bulkFileName    = ref('')
 const bulkUploading   = ref(false)
 const bulkResult      = ref(null)   // BulkImportResultDto
+const bulkMode        = ref('SKIP') // 'SKIP' | 'UPDATE'
 
 function openBulkModal() {
-  bulkFile.value    = null
+  bulkFile.value     = null
   bulkFileName.value = ''
-  bulkResult.value  = null
-  bulkModal.value   = true
+  bulkResult.value   = null
+  bulkMode.value     = 'SKIP'
+  bulkModal.value    = true
 }
 
 function onBulkFileChange(e) {
@@ -557,18 +559,14 @@ async function submitBulkImport() {
   bulkUploading.value = true
   bulkResult.value    = null
   try {
-    const res = await recipesApi.bulkImport(bulkFile.value)
+    const res = await recipesApi.bulkImport(bulkFile.value, bulkMode.value)
     bulkResult.value = res.data?.data ?? res.data
-    if (bulkResult.value?.successCount > 0) {
-      toast.success(`${bulkResult.value.successCount} ta yangi retsept qo'shildi!`)
-      await loadRecipes()
-    }
-    if (bulkResult.value?.skippedCount > 0) {
-      toast.info(`${bulkResult.value.skippedCount} ta retsept o'tkazib yuborildi (dublikat)`)
-    }
-    if (bulkResult.value?.failedCount > 0) {
-      toast.error(`${bulkResult.value.failedCount} ta qatorda xatolik`)
-    }
+    const r = bulkResult.value
+    if (r?.successCount > 0 || r?.updatedCount > 0) await loadRecipes()
+    if (r?.successCount > 0)  toast.success(`${r.successCount} ta yangi retsept qo'shildi!`)
+    if (r?.updatedCount > 0)  toast.success(`${r.updatedCount} ta retsept yangilandi!`)
+    if (r?.skippedCount > 0)  toast.info(`${r.skippedCount} ta dublikat o'tkazib yuborildi`)
+    if (r?.failedCount > 0)   toast.error(`${r.failedCount} ta qatorda xatolik`)
   } catch (e) {
     toast.error(e?.response?.data?.message ?? 'Yuklashda xatolik')
   } finally {
@@ -1268,6 +1266,23 @@ async function downloadTemplate() {
                 Shablonni yuklab olish (.xlsx)
               </button>
 
+              <!-- Mode toggle -->
+              <div class="bulk-mode-row">
+                <span class="bulk-mode-label">Dublikat bo'lsa:</span>
+                <div class="bulk-mode-btns">
+                  <button
+                    :class="['bulk-mode-btn', bulkMode === 'SKIP' ? 'bulk-mode-active-skip' : '']"
+                    @click="bulkMode = 'SKIP'"
+                    type="button"
+                  >⏭ O'tkazib yubor</button>
+                  <button
+                    :class="['bulk-mode-btn', bulkMode === 'UPDATE' ? 'bulk-mode-active-update' : '']"
+                    @click="bulkMode = 'UPDATE'"
+                    type="button"
+                  >✏️ Yangilash</button>
+                </div>
+              </div>
+
               <!-- Drop zone -->
               <div
                 class="bulk-dropzone"
@@ -1294,6 +1309,7 @@ async function downloadTemplate() {
                 <div class="bulk-result-summary">
                   <span class="brs-total">Jami: {{ bulkResult.totalRows }} qator</span>
                   <span class="brs-ok">✅ {{ bulkResult.successCount }} yangi</span>
+                  <span v-if="bulkResult.updatedCount" class="brs-upd">✏️ {{ bulkResult.updatedCount }} yangilandi</span>
                   <span v-if="bulkResult.skippedCount" class="brs-skip">⏭ {{ bulkResult.skippedCount }} dublikat</span>
                   <span v-if="bulkResult.failedCount" class="brs-err">❌ {{ bulkResult.failedCount }} xatolik</span>
                 </div>
@@ -1308,12 +1324,12 @@ async function downloadTemplate() {
                     v-for="row in bulkResult.results"
                     :key="row.row"
                     class="brt-row"
-                    :class="row.status === 'SUCCESS' ? 'brt-ok' : row.status === 'SKIPPED' ? 'brt-skip' : 'brt-fail'"
+                    :class="row.status === 'SUCCESS' ? 'brt-ok' : row.status === 'UPDATED' ? 'brt-upd' : row.status === 'SKIPPED' ? 'brt-skip' : 'brt-fail'"
                   >
                     <span class="brt-num">#{{ row.row }}</span>
                     <span class="brt-title">{{ row.titleUz || '—' }}</span>
                     <span class="brt-status">
-                      {{ row.status === 'SUCCESS' ? '✅' : row.status === 'SKIPPED' ? '⏭' : '❌' }}
+                      {{ row.status === 'SUCCESS' ? '✅' : row.status === 'UPDATED' ? '✏️' : row.status === 'SKIPPED' ? '⏭' : '❌' }}
                     </span>
                     <span class="brt-error">{{ row.error || '' }}</span>
                   </div>
@@ -1841,6 +1857,7 @@ async function downloadTemplate() {
 }
 .brs-total { color: var(--tx-4); }
 .brs-ok    { color: #4ade80; }
+.brs-upd   { color: #60a5fa; }
 .brs-skip  { color: #fbbf24; }
 .brs-err   { color: #f87171; }
 
@@ -1857,8 +1874,25 @@ async function downloadTemplate() {
   font-size: 12px; gap: 8px; align-items: center;
 }
 .brt-ok   { background: rgba(34,197,94,0.03); }
+.brt-upd  { background: rgba(96,165,250,0.04); }
 .brt-skip { background: rgba(251,191,36,0.04); }
 .brt-fail { background: rgba(239,68,68,0.04); }
+
+/* Mode toggle */
+.bulk-mode-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.bulk-mode-label { font-size: 12px; font-weight: 700; color: var(--tx-4); white-space: nowrap; }
+.bulk-mode-btns { display: flex; gap: 6px; }
+.bulk-mode-btn {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--bd-md); background: var(--bg-input); color: var(--tx-4);
+  cursor: pointer; transition: all 0.15s;
+}
+.bulk-mode-active-skip {
+  background: rgba(251,191,36,0.12); border-color: rgba(251,191,36,0.4); color: #fbbf24;
+}
+.bulk-mode-active-update {
+  background: rgba(96,165,250,0.12); border-color: rgba(96,165,250,0.4); color: #60a5fa;
+}
 .brt-num    { font-weight: 700; color: var(--tx-5); }
 .brt-title  { font-weight: 600; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brt-status { text-align: center; }

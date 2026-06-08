@@ -49,10 +49,10 @@ export const recipesApi = {
   incrementView: (id: number | string): Promise<AxiosResponse<void>> =>
     api.post(`/recipes/${id}/view`),
 
-  bulkImport: (file: File): Promise<AxiosResponse<any>> => {
+  bulkImport: (file: File, mode: 'SKIP' | 'UPDATE' = 'SKIP'): Promise<AxiosResponse<any>> => {
     const form = new FormData()
     form.append('file', file)
-    return api.post('/admin/recipes/bulk-import', form, {
+    return api.post(`/admin/recipes/bulk-import?mode=${mode}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
