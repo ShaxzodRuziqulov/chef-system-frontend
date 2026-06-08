@@ -560,8 +560,11 @@ async function submitBulkImport() {
     const res = await recipesApi.bulkImport(bulkFile.value)
     bulkResult.value = res.data?.data ?? res.data
     if (bulkResult.value?.successCount > 0) {
-      toast.success(`${bulkResult.value.successCount} ta retsept yuklandi!`)
+      toast.success(`${bulkResult.value.successCount} ta yangi retsept qo'shildi!`)
       await loadRecipes()
+    }
+    if (bulkResult.value?.skippedCount > 0) {
+      toast.info(`${bulkResult.value.skippedCount} ta retsept o'tkazib yuborildi (dublikat)`)
     }
     if (bulkResult.value?.failedCount > 0) {
       toast.error(`${bulkResult.value.failedCount} ta qatorda xatolik`)
@@ -1290,7 +1293,8 @@ async function downloadTemplate() {
               <div v-if="bulkResult" class="bulk-result">
                 <div class="bulk-result-summary">
                   <span class="brs-total">Jami: {{ bulkResult.totalRows }} qator</span>
-                  <span class="brs-ok">✅ {{ bulkResult.successCount }} muvaffaqiyatli</span>
+                  <span class="brs-ok">✅ {{ bulkResult.successCount }} yangi</span>
+                  <span v-if="bulkResult.skippedCount" class="brs-skip">⏭ {{ bulkResult.skippedCount }} dublikat</span>
                   <span v-if="bulkResult.failedCount" class="brs-err">❌ {{ bulkResult.failedCount }} xatolik</span>
                 </div>
                 <div class="bulk-result-table">
@@ -1298,17 +1302,19 @@ async function downloadTemplate() {
                     <span>Qator</span>
                     <span>Retsept</span>
                     <span>Holat</span>
-                    <span>Xato</span>
+                    <span>Izoh</span>
                   </div>
                   <div
                     v-for="row in bulkResult.results"
                     :key="row.row"
                     class="brt-row"
-                    :class="row.status === 'SUCCESS' ? 'brt-ok' : 'brt-fail'"
+                    :class="row.status === 'SUCCESS' ? 'brt-ok' : row.status === 'SKIPPED' ? 'brt-skip' : 'brt-fail'"
                   >
                     <span class="brt-num">#{{ row.row }}</span>
                     <span class="brt-title">{{ row.titleUz || '—' }}</span>
-                    <span class="brt-status">{{ row.status === 'SUCCESS' ? '✅' : '❌' }}</span>
+                    <span class="brt-status">
+                      {{ row.status === 'SUCCESS' ? '✅' : row.status === 'SKIPPED' ? '⏭' : '❌' }}
+                    </span>
                     <span class="brt-error">{{ row.error || '' }}</span>
                   </div>
                 </div>
@@ -1835,6 +1841,7 @@ async function downloadTemplate() {
 }
 .brs-total { color: var(--tx-4); }
 .brs-ok    { color: #4ade80; }
+.brs-skip  { color: #fbbf24; }
 .brs-err   { color: #f87171; }
 
 .bulk-result-table { border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
@@ -1850,6 +1857,7 @@ async function downloadTemplate() {
   font-size: 12px; gap: 8px; align-items: center;
 }
 .brt-ok   { background: rgba(34,197,94,0.03); }
+.brt-skip { background: rgba(251,191,36,0.04); }
 .brt-fail { background: rgba(239,68,68,0.04); }
 .brt-num    { font-weight: 700; color: var(--tx-5); }
 .brt-title  { font-weight: 600; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
