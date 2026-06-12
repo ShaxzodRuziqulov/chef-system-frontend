@@ -14,10 +14,12 @@ import RecipeFormModal              from '@/components/recipe/RecipeFormModal.vu
 import ConfirmModal                 from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }          from '@/utils/imageUrl'
 import { formatDate }              from '@/utils/formatDate'
+import { useToast }                from '@/composables/useToast'
 
 const auth      = useAuthStore()
 const lang      = useLangStore()
 const favorites = useFavoritesStore()
+const toast     = useToast()
 
 const recipes       = ref([])
 const mealPlanCount = ref(0)
@@ -189,6 +191,71 @@ async function savePassword() {
 // ── Recipes ───────────────────────────────────────────────────────
 function openCreateRecipe() { editingRecipe.value = null; showRecipeModal.value = true }
 function openEditRecipe(r)  { editingRecipe.value = r;    showRecipeModal.value = true }
+
+// ── Excel import (BLOGGER) ────────────────────────────────────────
+const importModal     = ref(false)
+const importFile      = ref(null)
+const importFileName  = ref('')
+const importUploading = ref(false)
+const importResult    = ref(null)
+
+function openImportModal() {
+  importFile.value     = null
+  importFileName.value = ''
+  importResult.value   = null
+  importModal.value    = true
+}
+
+function onImportFileChange(e) {
+  const f = e.target.files?.[0]
+  if (!f) return
+  importFile.value     = f
+  importFileName.value = f.name
+  importResult.value   = null
+}
+
+function onImportDrop(e) {
+  const f = e.dataTransfer.files?.[0]
+  if (!f) return
+  importFile.value     = f
+  importFileName.value = f.name
+  importResult.value   = null
+}
+
+async function submitImport() {
+  if (!importFile.value) return
+  importUploading.value = true
+  importResult.value    = null
+  try {
+    const res = await recipesApi.userImport(importFile.value, 'SKIP')
+    importResult.value = res.data?.data ?? res.data
+    const r = importResult.value
+    if (r?.successCount > 0) {
+      await loadMyRecipes()
+      toast.success(`${r.successCount} ta yangi retsept qo'shildi!`)
+    }
+    if (r?.skippedCount > 0) toast.info(`${r.skippedCount} ta retsept allaqachon mavjud — o'tkazib yuborildi`)
+    if (r?.failedCount  > 0) toast.error(`${r.failedCount} ta qatorda xatolik`)
+  } catch (e) {
+    toast.error(e?.response?.data?.message ?? 'Yuklashda xatolik')
+  } finally {
+    importUploading.value = false
+  }
+}
+
+async function downloadImportTemplate() {
+  try {
+    const res = await recipesApi.userImportTemplate(lang.lang)
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a   = document.createElement('a')
+    a.href     = url
+    a.download = 'retsept_shablon.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    toast.error('Shablonni yuklab bo\'lmadi')
+  }
+}
 
 function handleRecipeSaved(saved) {
   showRecipeModal.value = false
@@ -421,10 +488,16 @@ async function confirmLeaveOshpaz() {
       <div v-if="auth.isBlogger" class="section">
         <div class="section-head">
           <h2 class="section-title">{{ lang.t('profile.my_recipes') }}</h2>
-          <button @click="openCreateRecipe" class="btn-add">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
-            {{ lang.t('common.add') }}
-          </button>
+          <div class="section-actions">
+            <button @click="openImportModal" class="btn-import">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              Excel
+            </button>
+            <button @click="openCreateRecipe" class="btn-add">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
+              {{ lang.t('common.add') }}
+            </button>
+          </div>
         </div>
 
         <div v-if="recipes.length" class="recipe-grid">
@@ -466,6 +539,90 @@ async function confirmLeaveOshpaz() {
     </template>
 
     <!-- ══════════════ MODALS ══════════════ -->
+
+    <!-- ── EXCEL IMPORT MODAL ── -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="importModal" class="modal-overlay" @click.self="importModal = false">
+          <div class="import-modal">
+
+            <!-- Head -->
+            <div class="im-head">
+              <div class="im-icon">📥</div>
+              <div>
+                <h3 class="im-title">Excel orqali retsept yuklash</h3>
+                <p class="im-sub">3 varaqli shablon: Retseptlar · Ingredientlar · Bosqichlar</p>
+              </div>
+              <button class="im-close" @click="importModal = false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div class="im-body">
+              <!-- Template download -->
+              <button class="im-template-btn" @click="downloadImportTemplate">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:14px;height:14px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Shablonni yuklab olish (.xlsx)
+              </button>
+
+              <!-- Dropzone -->
+              <div
+                class="im-dropzone"
+                :class="{ 'im-dz-active': importFileName }"
+                @dragover.prevent
+                @drop.prevent="onImportDrop"
+                @click="$refs.importFileInput.click()"
+              >
+                <input ref="importFileInput" type="file" accept=".xlsx" style="display:none" @change="onImportFileChange" />
+                <div v-if="!importFileName" class="im-dz-hint">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="im-dz-icon"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  <span class="im-dz-text">Excel faylni bu yerga tashlang yoki bosing</span>
+                  <span class="im-dz-sub">.xlsx formati</span>
+                </div>
+                <div v-else class="im-dz-chosen">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px;height:20px;color:#4ade80;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span class="im-dz-fname">{{ importFileName }}</span>
+                  <button class="im-dz-clear" @click.stop="importFile=null; importFileName=''; importResult=null">✕</button>
+                </div>
+              </div>
+
+              <!-- Result -->
+              <div v-if="importResult" class="im-result">
+                <div class="im-result-summary">
+                  <span class="irs-total">Jami: {{ importResult.totalRows }} qator</span>
+                  <span class="irs-ok">✅ {{ importResult.successCount }} yangi</span>
+                  <span v-if="importResult.skippedCount" class="irs-skip">⚠️ {{ importResult.skippedCount }} allaqachon mavjud</span>
+                  <span v-if="importResult.failedCount"  class="irs-err">❌ {{ importResult.failedCount }} xatolik</span>
+                </div>
+                <div class="im-result-table">
+                  <div class="irt-head"><span>Qator</span><span>Retsept</span><span>Holat</span><span>Izoh</span></div>
+                  <div
+                    v-for="row in importResult.results" :key="row.row"
+                    class="irt-row"
+                    :class="row.status === 'SUCCESS' ? 'irt-ok' : row.status === 'SKIPPED' ? 'irt-skip' : 'irt-fail'"
+                  >
+                    <span class="irt-num">#{{ row.row }}</span>
+                    <span class="irt-title">{{ row.titleUz || '—' }}</span>
+                    <span class="irt-status">{{ row.status === 'SUCCESS' ? '✅' : row.status === 'SKIPPED' ? '⚠️' : '❌' }}</span>
+                    <span class="irt-error">{{ row.error || '' }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="im-footer">
+              <button class="im-cancel" @click="importModal = false">Yopish</button>
+              <button class="im-save" @click="submitImport" :disabled="importUploading || !importFile">
+                <span v-if="importUploading" class="spinner sm" />
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px;height:16px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                {{ importUploading ? 'Yuklanmoqda...' : 'Yuklash' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Recipe form -->
     <RecipeFormModal :recipe="editingRecipe" :visible="showRecipeModal"
@@ -938,12 +1095,109 @@ async function confirmLeaveOshpaz() {
 .section-head { display: flex; align-items: center; justify-content: space-between; }
 .section-title { font-size: 17px; font-weight: 900; color: var(--tx-1); }
 
+.section-actions { display: flex; align-items: center; gap: 8px; }
+
+.btn-import {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25); border-radius: 10px;
+  color: #4ade80; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.btn-import svg { width: 14px; height: 14px; }
+.btn-import:hover { background: rgba(34,197,94,0.18); transform: translateY(-1px); }
+
 .btn-add {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 14px;
   background: rgba(216,90,48,0.12); border: 1px solid rgba(216,90,48,0.25); border-radius: 10px;
   color: #E8713E; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s;
 }
+
+/* ── Import Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.import-modal {
+  width: 100%; max-width: 560px;
+  background: var(--bg-surface); border: 1px solid var(--bd-md);
+  border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,0.6); overflow: hidden;
+}
+.im-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 20px 24px; border-bottom: 1px solid var(--bd);
+}
+.im-icon  { font-size: 28px; flex-shrink: 0; }
+.im-title { font-size: 16px; font-weight: 900; color: var(--tx-1); }
+.im-sub   { font-size: 12px; color: var(--tx-5); margin-top: 2px; }
+.im-close {
+  margin-left: auto; flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px;
+  background: var(--bg-input); border: none; color: var(--tx-4); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: background 0.2s;
+}
+.im-close:hover { background: var(--bg-input-f); color: var(--tx-2); }
+.im-close svg { width: 16px; height: 16px; }
+
+.im-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+
+.im-template-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 10px; width: fit-content;
+  background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3);
+  color: #818cf8; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.im-template-btn:hover { background: rgba(99,102,241,0.2); }
+
+.im-dropzone {
+  border: 2px dashed var(--bd-md); border-radius: 14px; min-height: 110px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: border-color 0.2s, background 0.2s;
+  background: var(--bg-input); padding: 20px;
+}
+.im-dropzone:hover, .im-dz-active { border-color: rgba(216,90,48,0.5); background: rgba(216,90,48,0.04); }
+.im-dz-hint { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; pointer-events: none; }
+.im-dz-icon { width: 32px; height: 32px; color: var(--tx-5); }
+.im-dz-text { font-size: 14px; font-weight: 700; color: var(--tx-3); }
+.im-dz-sub  { font-size: 12px; color: var(--tx-6); }
+.im-dz-chosen { display: flex; align-items: center; gap: 10px; width: 100%; }
+.im-dz-fname  { flex: 1; font-size: 14px; font-weight: 700; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.im-dz-clear  { width: 24px; height: 24px; border-radius: 6px; border: none; background: var(--bd-lg); color: var(--tx-4); font-size: 11px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+
+.im-result { }
+.im-result-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+.irs-total { color: var(--tx-4); } .irs-ok { color: #4ade80; } .irs-skip { color: #fbbf24; } .irs-err { color: #f87171; }
+.im-result-table { border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+.irt-head { display: grid; grid-template-columns: 50px 1fr 60px 1fr; padding: 8px 12px; background: var(--bg-input); font-size: 10px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em; gap: 8px; }
+.irt-row  { display: grid; grid-template-columns: 50px 1fr 60px 1fr; padding: 9px 12px; border-top: 1px solid var(--bd); font-size: 12px; gap: 8px; align-items: center; }
+.irt-ok   { background: rgba(34,197,94,0.03); }
+.irt-skip { background: rgba(251,191,36,0.04); }
+.irt-fail { background: rgba(239,68,68,0.04); }
+.irt-num   { font-weight: 700; color: var(--tx-5); }
+.irt-title { font-weight: 600; color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.irt-status { text-align: center; }
+.irt-error  { font-size: 11px; color: #f87171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.im-footer { display: flex; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--bd); }
+.im-cancel {
+  flex: 1; height: 42px; border-radius: 11px;
+  background: var(--bg-input); border: 1px solid var(--bd-md);
+  color: var(--tx-4); font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+}
+.im-cancel:hover { background: var(--bg-input-f); }
+.im-save {
+  flex: 2; height: 42px; border-radius: 11px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border: none; color: white; font-size: 14px; font-weight: 800;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+  box-shadow: 0 4px 14px rgba(216,90,48,0.35); transition: opacity 0.2s, transform 0.2s;
+}
+.im-save:hover:not(:disabled) { transform: translateY(-1px); }
+.im-save:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-fade-enter-active { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+.modal-fade-leave-active { transition: all 0.2s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+.modal-fade-enter-from .import-modal, .modal-fade-leave-to .import-modal { transform: scale(0.95) translateY(10px); }
 .btn-add svg { width: 14px; height: 14px; }
 .btn-add:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
 

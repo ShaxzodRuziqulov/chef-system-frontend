@@ -32,11 +32,6 @@ function search() {
   }
 }
 
-const langs = [
-  { code: 'uz', label: "O'Z" },
-  { code: 'ru', label: 'РУ'  },
-  { code: 'en', label: 'EN'  },
-]
 </script>
 
 <template>
@@ -97,6 +92,17 @@ const langs = [
           <input v-model="query" type="text" :placeholder="langStore.t('nav.search')" />
         </form>
 
+        <!-- Language switcher -->
+        <div class="nb-lang">
+          <button
+            v-for="l in ['uz', 'ru', 'en']"
+            :key="l"
+            class="nb-lang-btn"
+            :class="{ 'nb-lang-active': langStore.lang === l }"
+            @click="langStore.setLang(l)"
+          >{{ l.toUpperCase() }}</button>
+        </div>
+
         <!-- Theme toggle -->
         <button
           class="nb-theme-btn"
@@ -121,17 +127,6 @@ const langs = [
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
           </svg>
         </button>
-
-        <!-- Language switcher -->
-        <div class="nb-lang">
-          <button
-            v-for="l in langs"
-            :key="l.code"
-            class="nb-lang-btn"
-            :class="{ 'nb-lang-active': langStore.lang === l.code }"
-            @click="langStore.setLang(l.code)"
-          >{{ l.label }}</button>
-        </div>
 
         <!-- Auth -->
         <template v-if="auth.isAuthenticated">
@@ -162,17 +157,19 @@ const langs = [
           <input v-model="query" type="text" :placeholder="langStore.t('nav.search_mobile')" />
         </form>
 
-        <!-- Mobile language switcher + theme toggle -->
+        <!-- Theme toggle (mobile) -->
         <div class="nb-mobile-top-row">
-          <div class="nb-mobile-lang">
+          <!-- Lang switcher (mobile) -->
+          <div class="nb-lang nb-lang-mobile">
             <button
-              v-for="l in langs"
-              :key="l.code"
+              v-for="l in ['uz', 'ru', 'en']"
+              :key="l"
               class="nb-lang-btn"
-              :class="{ 'nb-lang-active': langStore.lang === l.code }"
-              @click="langStore.setLang(l.code)"
-            >{{ l.label }}</button>
+              :class="{ 'nb-lang-active': langStore.lang === l }"
+              @click="langStore.setLang(l)"
+            >{{ l.toUpperCase() }}</button>
           </div>
+
           <button class="nb-mobile-theme-btn" @click="theme.toggle()" :title="theme.isDark ? 'Kunduzgi rejim' : 'Tungi rejim'">
             <svg v-if="theme.isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="5"/>
@@ -418,41 +415,6 @@ const langs = [
 }
 .nb-btn-reg:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(216,90,48,0.4); }
 
-/* ── Language switcher ── */
-.nb-lang {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  background: var(--bg-card-md);
-  border: 1px solid var(--bd-md);
-  border-radius: 10px;
-  padding: 3px;
-}
-.nb-mobile-lang {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 4px;
-}
-.nb-lang-btn {
-  padding: 4px 9px;
-  border-radius: 7px;
-  border: none;
-  background: none;
-  color: var(--tx-5);
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  letter-spacing: 0.04em;
-  transition: background 0.15s, color 0.15s;
-}
-.nb-lang-btn:hover { color: var(--tx-3); background: var(--bd); }
-.nb-lang-active {
-  background: linear-gradient(135deg, #D85A30, #E8713E) !important;
-  color: #fff !important;
-  box-shadow: 0 2px 8px rgba(216,90,48,0.35);
-}
-
 /* ── Theme toggle (desktop) ── */
 .nb-theme-btn {
   width: 34px;
@@ -474,6 +436,36 @@ const langs = [
   border-color: var(--bd-xl);
 }
 .nb-theme-btn svg { width: 16px; height: 16px; }
+
+/* ── Language switcher ── */
+.nb-lang {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-card-md);
+  border: 1px solid var(--bd-md);
+  border-radius: 10px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.nb-lang-mobile { margin-right: auto; }
+.nb-lang-btn {
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: none;
+  background: none;
+  color: var(--tx-5);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.nb-lang-btn:hover { color: var(--tx-2); background: var(--bg-input); }
+.nb-lang-active {
+  background: linear-gradient(135deg, #D85A30, #E8713E) !important;
+  color: #fff !important;
+}
 
 /* ── Hamburger ── */
 .nb-burger {

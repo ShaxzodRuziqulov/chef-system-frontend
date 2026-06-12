@@ -52,15 +52,9 @@ export const authApi = {
   ): Promise<AxiosResponse<void>> =>
     api.post('/auth/logout', { refresh_token: refreshToken }),
 
-  /** Parolni tiklash so'rovi (username yoki email) */
+  /** Username va yangi parol orqali parolni tiklash (emailsiz) */
   forgotPassword: (
-    usernameOrEmail: string,
+    data: { username: string; newPassword: string },
   ): Promise<AxiosResponse<ApiResponse<string>>> =>
-    api.post('/auth/forgot-password', { usernameOrEmail }),
-
-  /** Token orqali yangi parol o'rnatish */
-  resetPassword: (
-    data: { token: string; newPassword: string },
-  ): Promise<AxiosResponse<ApiResponse<string>>> =>
-    api.post('/auth/reset-password', data),
+    api.post('/auth/forgot-password', data),
 }

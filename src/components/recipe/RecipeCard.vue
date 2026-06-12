@@ -15,7 +15,8 @@ const favorites = useFavoritesStore()
 const auth      = useAuthStore()
 const toast     = useToast()
 
-const title = computed(() => lang.recipeTitle(props.recipe))
+const title          = computed(() => lang.recipeTitle(props.recipe))
+const titleFallback  = computed(() => lang.recipeTitleIsFallback(props.recipe))
 
 const diffMap = computed(() => ({
   EASY:   { label: lang.t('common.easy'),   cls: 'diff-easy'   },
@@ -67,7 +68,10 @@ function toggleFav(e) {
 
     <!-- Body -->
     <div class="card-body">
-      <h3 class="card-title">{{ title }}</h3>
+      <h3 class="card-title">
+        {{ title }}
+        <span v-if="titleFallback" class="card-title-fallback" title="O'zbekcha (tarjima mavjud emas)">🇺🇿</span>
+      </h3>
 
       <!-- Muallif -->
       <div v-if="recipe.authorFullName" class="card-author">
@@ -247,6 +251,12 @@ function toggleFav(e) {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 2.6em;
+}
+.card-title-fallback {
+  font-size: 10px;
+  vertical-align: middle;
+  margin-left: 3px;
+  opacity: 0.7;
 }
 
 .card-meta {

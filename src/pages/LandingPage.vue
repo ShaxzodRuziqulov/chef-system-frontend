@@ -2,17 +2,11 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { RouterLink } from 'vue-router'
 import { platformApi } from '@/api/platform'
-import { useLangStore, type Lang } from '@/stores/langStore'
+import { useLangStore } from '@/stores/langStore'
 import { useThemeStore } from '@/stores/themeStore'
 
 const lang  = useLangStore()
 const theme = useThemeStore()
-
-const langFlags: { code: Lang; label: string }[] = [
-  { code: 'uz', label: 'UZ' },
-  { code: 'ru', label: 'RU' },
-  { code: 'en', label: 'EN' },
-]
 
 const navLinks = computed(() => [
   { id: 'features', label: lang.t('landing.nav_features') },
@@ -178,16 +172,6 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="nav-actions">
-          <div class="lang-flags">
-            <button
-              v-for="l in langFlags"
-              :key="l.code"
-              class="lang-flag-btn"
-              :class="{ 'flag-active': lang.lang === l.code }"
-              @click="lang.setLang(l.code)"
-            >{{ l.label }}</button>
-          </div>
-
           <button class="icon-btn" @click="theme.toggle()" :aria-label="theme.isDark ? 'Light mode' : 'Dark mode'">
             <svg v-if="theme.isDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="5"/>
@@ -627,16 +611,7 @@ onBeforeUnmount(() => {
 .icon-btn svg { width: 16px; height: 16px; }
 .nav-burger { display: none; }
 
-/* ── Lang flags ── */
-.lang-flags {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  background: var(--bg-card-md);
-  border: 1px solid var(--bd-md);
-  border-radius: 10px;
-}
+/* ── Lang flags — o'chirildi ── */
 .lang-flag-btn {
   padding: 4px 8px;
   border: none;
@@ -1282,7 +1257,6 @@ onBeforeUnmount(() => {
   .hero-visual { display: none; }
   .footer-cols { grid-template-columns: 1fr 1fr; }
   .nav-inner { padding: 0 16px; gap: 8px; }
-  .lang-flags { display: none; }
 }
 @media (max-width: 480px) {
   .hero-stats { gap: 20px; }

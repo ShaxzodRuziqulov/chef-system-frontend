@@ -53,28 +53,36 @@ const onSubmit = handleSubmit(async (values) => {
 })
 
 // ── Forgot Password ────────────────────────────────────────────────────────
-const showForgot = ref(false)
-const forgotInput = ref('')
+const showForgot    = ref(false)
+const forgotUser    = ref('')
+const forgotPw      = ref('')
+const forgotShowPw  = ref(false)
 const forgotLoading = ref(false)
-const forgotError = ref('')
+const forgotError   = ref('')
 const forgotSuccess = ref(false)
 
 function openForgot() {
-  forgotInput.value = ''
-  forgotError.value = ''
+  forgotUser.value    = ''
+  forgotPw.value      = ''
+  forgotShowPw.value  = false
+  forgotError.value   = ''
   forgotSuccess.value = false
-  showForgot.value = true
+  showForgot.value    = true
 }
 
 async function submitForgot() {
-  if (!forgotInput.value.trim()) {
-    forgotError.value = lang.t('auth.reset_empty')
+  if (!forgotUser.value.trim()) {
+    forgotError.value = 'Username kiritilishi shart'
+    return
+  }
+  if (forgotPw.value.length < 4) {
+    forgotError.value = 'Yangi parol kamida 4 ta belgidan iborat bo\'lishi kerak'
     return
   }
   forgotLoading.value = true
-  forgotError.value = ''
+  forgotError.value   = ''
   try {
-    await authApi.forgotPassword(forgotInput.value.trim())
+    await authApi.forgotPassword({ username: forgotUser.value.trim(), newPassword: forgotPw.value })
     forgotSuccess.value = true
   } catch (e: any) {
     forgotError.value = e?.response?.data?.message || 'Xatolik yuz berdi'
@@ -239,46 +247,68 @@ onMounted(() => {
           <div class="fp-head">
             <div class="fp-icon">🔑</div>
             <div>
-              <div class="fp-title">{{ lang.t('auth.reset_title') }}</div>
-              <div class="fp-sub">{{ lang.t('auth.reset_sub') }}</div>
+              <div class="fp-title">Parolni tiklash</div>
+              <div class="fp-sub">Username va yangi parolni kiriting</div>
             </div>
             <button class="fp-close" @click="showForgot = false">✕</button>
           </div>
 
           <template v-if="!forgotSuccess">
             <div class="fp-body">
+              <!-- Username -->
               <div class="fp-input-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="fp-inp-icon">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                 </svg>
                 <input
-                    v-model="forgotInput"
+                    v-model="forgotUser"
                     type="text"
-                    :placeholder="lang.t('auth.reset_ph')"
+                    placeholder="Username"
                     class="fp-input"
+                    autocomplete="username"
+                />
+              </div>
+              <!-- Yangi parol -->
+              <div class="fp-input-wrap" style="margin-top:10px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="fp-inp-icon">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+                <input
+                    v-model="forgotPw"
+                    :type="forgotShowPw ? 'text' : 'password'"
+                    placeholder="Yangi parol"
+                    class="fp-input"
+                    autocomplete="new-password"
                     @keyup.enter="submitForgot"
                 />
+                <button type="button" class="fp-eye" @click="forgotShowPw = !forgotShowPw" tabindex="-1">
+                  <svg v-if="forgotShowPw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
               </div>
               <p v-if="forgotError" class="fp-error">{{ forgotError }}</p>
             </div>
             <div class="fp-foot">
-              <button class="fp-cancel" @click="showForgot = false" :disabled="forgotLoading">{{ lang.t('common.cancel') }}</button>
+              <button class="fp-cancel" @click="showForgot = false" :disabled="forgotLoading">Bekor qilish</button>
               <button class="fp-submit" @click="submitForgot" :disabled="forgotLoading">
                 <span v-if="forgotLoading" class="fp-spin"/>
-                {{ forgotLoading ? lang.t('auth.reset_sending') : lang.t('auth.reset_send') }}
+                {{ forgotLoading ? 'Saqlanmoqda...' : 'Saqlash' }}
               </button>
             </div>
           </template>
 
           <template v-else>
             <div class="fp-success">
-              <div class="fp-ok-icon">✉️</div>
-              <div class="fp-ok-title">{{ lang.t('auth.reset_sent') }}</div>
-              <p class="fp-ok-text">
-                Agar <strong>{{ forgotInput }}</strong> {{ lang.t('auth.reset_ok') }}
-              </p>
-              <button class="fp-submit" @click="showForgot = false">{{ lang.t('auth.reset_close') }}</button>
+              <div class="fp-ok-icon">✅</div>
+              <div class="fp-ok-title">Parol yangilandi!</div>
+              <p class="fp-ok-text"><strong>{{ forgotUser }}</strong> uchun parol muvaffaqiyatli o'zgartirildi.</p>
+              <button class="fp-submit" @click="showForgot = false">Yopish</button>
             </div>
           </template>
 
@@ -737,6 +767,19 @@ onMounted(() => {
 .fp-input::placeholder {
   color: var(--tx-5);
 }
+
+.fp-eye {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--tx-5);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.fp-eye:hover { color: var(--tx-3); }
+.fp-eye svg { width: 16px; height: 16px; }
 
 .fp-error {
   margin-top: 8px;

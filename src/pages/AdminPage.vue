@@ -559,7 +559,7 @@ async function submitBulkImport() {
   bulkUploading.value = true
   bulkResult.value    = null
   try {
-    const res = await recipesApi.bulkImport(bulkFile.value, bulkMode.value)
+    const res = await recipesApi.userImport(bulkFile.value, bulkMode.value)
     bulkResult.value = res.data?.data ?? res.data
     const r = bulkResult.value
     if (r?.successCount > 0 || r?.updatedCount > 0) await loadRecipes()
@@ -576,7 +576,7 @@ async function submitBulkImport() {
 
 async function downloadTemplate() {
   try {
-    const res = await recipesApi.bulkImportTemplate()
+    const res = await recipesApi.userImportTemplate(lang.lang)
     const url = URL.createObjectURL(new Blob([res.data]))
     const a = document.createElement('a')
     a.href = url
@@ -585,6 +585,27 @@ async function downloadTemplate() {
     URL.revokeObjectURL(url)
   } catch {
     toast.error('Shablonni yuklab bo\'lmadi')
+  }
+}
+
+const exporting = ref(false)
+
+async function exportRecipes() {
+  exporting.value = true
+  try {
+    const res = await recipesApi.exportRecipes()
+    const today = new Date().toISOString().split('T')[0]
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `retseptlar_${today}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Retseptlar eksport qilindi!')
+  } catch {
+    toast.error('Eksport amalga oshmadi')
+  } finally {
+    exporting.value = false
   }
 }
 </script>
@@ -648,9 +669,14 @@ async function downloadTemplate() {
           <button v-if="search" @click="search=''" class="clear-btn">✕</button>
         </div>
         <span class="result-count">{{ filtered.length }} {{ lang.t('common.count') }}</span>
-        <button @click="openBulkModal" class="btn-bulk-import">
+        <button @click="openBulkModal" class="btn-bulk-import" title="Exceldan retsept yuklash (import)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-          Excel
+          Import
+        </button>
+        <button @click="exportRecipes" class="btn-bulk-export" :disabled="exporting" title="Retseptlarni Excelga eksport qilish">
+          <span v-if="exporting" class="spinner" />
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Export
         </button>
         <button @click="openCreateRecipe" class="btn-add-new">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/></svg>
@@ -1295,7 +1321,7 @@ async function downloadTemplate() {
                 <div v-if="!bulkFileName" class="bulk-dz-hint">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" class="bulk-dz-icon"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                   <span class="bulk-dz-text">Excel faylni bu yerga tashlang yoki bosing</span>
-                  <span class="bulk-dz-sub">.xlsx formati, maksimal 5 MB</span>
+                  <span class="bulk-dz-sub">.xlsx formati, maksimal 10 MB</span>
                 </div>
                 <div v-else class="bulk-dz-chosen">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:20px;height:20px;color:#4ade80;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1818,6 +1844,17 @@ async function downloadTemplate() {
 .btn-bulk-import:hover { background: rgba(34,197,94,0.18); }
 .btn-bulk-import svg { width: 15px; height: 15px; }
 
+.btn-bulk-export {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 14px; height: 42px;
+  background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 12px; color: #60a5fa; font-size: 13px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+}
+.btn-bulk-export:hover:not(:disabled) { background: rgba(59,130,246,0.18); }
+.btn-bulk-export:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-bulk-export svg { width: 15px; height: 15px; }
+
 .bulk-modal { max-width: 600px; }
 
 .bulk-template-btn {
@@ -1899,7 +1936,7 @@ async function downloadTemplate() {
 .brt-error  { font-size: 11px; color: #f87171; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 480px) {
-  .btn-bulk-import { padding: 0 10px; font-size: 12px; }
+  .btn-bulk-import, .btn-bulk-export { padding: 0 10px; font-size: 12px; }
   .brt-head, .brt-row { grid-template-columns: 40px 1fr 44px 1fr; }
 }
 </style>

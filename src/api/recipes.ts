@@ -49,14 +49,20 @@ export const recipesApi = {
   incrementView: (id: number | string): Promise<AxiosResponse<void>> =>
     api.post(`/recipes/${id}/view`),
 
-  bulkImport: (file: File, mode: 'SKIP' | 'UPDATE' = 'SKIP'): Promise<AxiosResponse<any>> => {
+  // 3-varaqli format (Retseptlar | Ingredientlar | Bosqichlar)
+  // BLOGGER: faqat SKIP, ADMIN: SKIP yoki UPDATE
+  userImport: (file: File, mode: 'SKIP' | 'UPDATE' = 'SKIP'): Promise<AxiosResponse<any>> => {
     const form = new FormData()
     form.append('file', file)
-    return api.post(`/admin/recipes/bulk-import?mode=${mode}`, form, {
+    return api.post(`/recipes/import?mode=${mode}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
 
-  bulkImportTemplate: (): Promise<AxiosResponse<Blob>> =>
-    api.get('/admin/recipes/bulk-import/template', { responseType: 'blob' }),
+  userImportTemplate: (lang = 'uz'): Promise<AxiosResponse<Blob>> =>
+    api.get(`/recipes/import/template?lang=${lang}`, { responseType: 'blob' }),
+
+  // BLOGGER: o'z retseptlarini, ADMIN: barcha retseptlarni eksport qiladi
+  exportRecipes: (): Promise<AxiosResponse<Blob>> =>
+    api.get('/recipes/export', { responseType: 'blob' }),
 }

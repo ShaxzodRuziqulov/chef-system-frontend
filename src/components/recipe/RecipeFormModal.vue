@@ -35,6 +35,7 @@ function emptyForm() {
   return {
     titleUz:         '',
     titleRu:         '',
+    titleEng:        '',
     description:     '',
     categoryId:      '',
     difficultyLevel: 'MEDIUM',
@@ -229,6 +230,7 @@ watch(() => props.visible, async (val) => {
     form.value = {
       titleUz:         r.titleUz         || '',
       titleRu:         r.titleRu         || '',
+      titleEng:        r.titleEng        || '',
       description:     r.description     || '',
       categoryId:      r.categoryId      || '',
       difficultyLevel: r.difficultyLevel || 'MEDIUM',
@@ -444,9 +446,14 @@ async function save() {
                   <input v-model="form.titleUz" class="field-input" placeholder="Masalan: Osh palov" />
                 </div>
                 <!-- Title RU -->
-                <div class="form-field span-2">
+                <div class="form-field">
                   <label class="field-label">{{ lang.t('form.title_ru') }}</label>
-                  <input v-model="form.titleRu" class="field-input" placeholder="Ploff uzbekskiy" />
+                  <input v-model="form.titleRu" class="field-input" placeholder="Плов узбекский" />
+                </div>
+                <!-- Title ENG -->
+                <div class="form-field">
+                  <label class="field-label">{{ lang.t('form.title_eng') }}</label>
+                  <input v-model="form.titleEng" class="field-input" placeholder="Uzbek Plov" />
                 </div>
                 <!-- Description -->
                 <div class="form-field span-2">

@@ -201,6 +201,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'form.edit_title':       'Retseptni tahrirlash',
     'form.title_uz':         "Nomi (O'zbek) *",
     'form.title_ru':         'Nomi (Rus)',
+    'form.title_eng':        'Nomi (Ingliz)',
     'form.description':      'Tavsif',
     'form.category':         'Kategoriya',
     'form.select_cat':       '— Kategoriya tanlang —',
@@ -744,6 +745,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'form.edit_title':       'Редактировать рецепт',
     'form.title_uz':         'Название (Узб) *',
     'form.title_ru':         'Название (Рус)',
+    'form.title_eng':        'Название (Англ)',
     'form.description':      'Описание',
     'form.category':         'Категория',
     'form.select_cat':       '— Выберите категорию —',
@@ -1284,6 +1286,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'form.edit_title':       'Edit Recipe',
     'form.title_uz':         'Name (Uzbek) *',
     'form.title_ru':         'Name (Russian)',
+    'form.title_eng':        'Name (English)',
     'form.description':      'Description',
     'form.category':         'Category',
     'form.select_cat':       '— Select category —',
@@ -1645,59 +1648,74 @@ const messages: Record<Lang, Record<string, string>> = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Pinia Store
 // ─────────────────────────────────────────────────────────────────────────────
-const LANG_KEY = 'oshpaz_lang'
+
+const STORAGE_KEY = 'oshpaz_lang'
+
+// Sahifa yuklanishida localStorage dan o'qish
+function storedLang(): Lang {
+  const v = localStorage.getItem(STORAGE_KEY)
+  return (v === 'uz' || v === 'ru' || v === 'en') ? v : 'uz'
+}
 
 export const useLangStore = defineStore('lang', () => {
-  const lang = ref<Lang>((localStorage.getItem(LANG_KEY) as Lang) || 'uz')
+  const lang = ref<Lang>(storedLang())
 
-  /** Tarjima qilish */
+  /** Tilni o'zgartirish — localStorage ga saqlanadi */
+  function setLang(l: Lang) {
+    lang.value = l
+    localStorage.setItem(STORAGE_KEY, l)
+  }
+
+  /** UI elementi tarjimasi — joriy tildan, o'zbekcha fallback bilan */
   function t(key: string): string {
     return messages[lang.value]?.[key] ?? messages.uz?.[key] ?? key
   }
 
-  /** Tilni o'zgartirish */
-  function setLang(l: Lang) {
-    lang.value = l
-    localStorage.setItem(LANG_KEY, l)
-  }
+  // ── Mazmun yordamchilari ───────────────────────────────────────────────
+  // Har bir funksiya joriy til → o'zbekcha fallback tartibida qaytaradi.
 
-  // ── Recipe matn yordamchilari ──────────────────────────────────────────
-
-  /** Retsept sarlavhasi — tanlangan tilga qarab */
+  /** Retsept sarlavhasi */
   function recipeTitle(r: any): string {
     if (!r) return ''
-    if (lang.value === 'ru' && r.titleRu)  return r.titleRu
-    if (lang.value === 'en' && r.titleEng) return r.titleEng
-    return r.titleUz || r.titleRu || r.titleEng || ''
+    if (lang.value === 'ru') return r.titleRu  || r.titleUz || ''
+    if (lang.value === 'en') return r.titleEng || r.titleUz || ''
+    return r.titleUz || ''
   }
 
-  /** Ingredient nomi — tanlangan tilga qarab
-   *  RecipeIngredientDto: ingredientNameUz / ingredientNameRu / ingredientNameEng
-   *  IngredientDto (search): nameUz / nameRu / nameEng
+  /**
+   * true — joriy til uchun tarjima yo'q, o'zbekcha ko'rsatilmoqda.
+   * RecipeCard va detail sahifada "🇺🇿" belgisi uchun ishlatiladi.
    */
+  function recipeTitleIsFallback(r: any): boolean {
+    if (!r || lang.value === 'uz') return false
+    if (lang.value === 'ru') return !r.titleRu
+    if (lang.value === 'en') return !r.titleEng
+    return false
+  }
+
+  /** Ingredient nomi (RecipeIngredientDto va IngredientDto ikkala shaklini qabul qiladi) */
   function ingName(ing: any): string {
     if (!ing) return ''
-    const uz  = ing.ingredientNameUz  ?? ing.nameUz  ?? ''
-    const ru  = ing.ingredientNameRu  ?? ing.nameRu  ?? ''
-    const en  = ing.ingredientNameEng ?? ing.nameEng ?? ''
-    if (lang.value === 'ru' && ru)  return ru
-    if (lang.value === 'en' && en)  return en
-    return uz || ru || en || ''
+    if (lang.value === 'ru') return ing.ingredientNameRu || ing.nameRu || ing.ingredientNameUz || ing.nameUz || ''
+    if (lang.value === 'en') return ing.ingredientNameEng || ing.nameEng || ing.ingredientNameUz || ing.nameUz || ''
+    return ing.ingredientNameUz || ing.nameUz || ''
   }
 
-  /** Kategoriya nomi — tanlangan tilga qarab
-   *  CategoryDto: nameUz / nameRu / nameEng
-   *  RecipeDto ichida: categoryNameUz / categoryNameRu / categoryNameEng
-   */
+  /** Kategoriya nomi (CategoryDto va RecipeDto ichidagi flat field ikkisini qabul qiladi) */
   function catName(c: any): string {
     if (!c) return ''
-    const uz  = c.nameUz  ?? c.categoryNameUz  ?? ''
-    const ru  = c.nameRu  ?? c.categoryNameRu  ?? ''
-    const en  = c.nameEng ?? c.categoryNameEng ?? ''
-    if (lang.value === 'ru' && ru) return ru
-    if (lang.value === 'en' && en) return en
-    return uz || ru || en || ''
+    if (lang.value === 'ru') return c.nameRu || c.categoryNameRu || c.nameUz || c.categoryNameUz || ''
+    if (lang.value === 'en') return c.nameEng || c.categoryNameEng || c.nameUz || c.categoryNameUz || ''
+    return c.nameUz || c.categoryNameUz || ''
   }
 
-  return { lang, t, setLang, recipeTitle, ingName, catName }
+  /** Teg nomi */
+  function tagName(tag: any): string {
+    if (!tag) return ''
+    if (lang.value === 'ru') return tag.nameRu || tag.nameUz || ''
+    if (lang.value === 'en') return tag.nameEng || tag.nameUz || ''
+    return tag.nameUz || ''
+  }
+
+  return { lang, setLang, t, recipeTitle, recipeTitleIsFallback, ingName, catName, tagName }
 })
