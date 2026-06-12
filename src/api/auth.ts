@@ -57,4 +57,10 @@ export const authApi = {
     data: { username: string; newPassword: string },
   ): Promise<AxiosResponse<ApiResponse<string>>> =>
     api.post('/auth/forgot-password', data),
+
+  /** Token orqali parol tiklash — ResetPasswordPage uchun (havoladan o'tilganda) */
+  resetPassword: (
+    data: { token: string; newPassword: string },
+  ): Promise<AxiosResponse<ApiResponse<string>>> =>
+    api.post('/auth/reset-password', data),
 }
