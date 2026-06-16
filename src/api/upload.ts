@@ -1,5 +1,5 @@
 import api from './axios'
-import type { AxiosResponse } from 'axios'
+import type { AxiosResponse, AxiosProgressEvent } from 'axios'
 import type { ApiResponse } from '@/types'
 
 const MAX_IMG_BYTES   = 5  * 1024 * 1024  // 5 MB
@@ -15,7 +15,7 @@ function formDataConfig(onProgress?: (pct: number) => void) {
     headers: { 'Content-Type': undefined as any },
     timeout: 120_000,
     onUploadProgress: onProgress
-      ? (e: ProgressEvent) => {
+      ? (e: AxiosProgressEvent) => {
           const pct = e.total ? Math.round((e.loaded * 100) / e.total) : 0
           onProgress(pct)
         }
