@@ -24,6 +24,11 @@ function onScroll() { fabVisible.value = window.scrollY > 200 }
 onMounted(() => window.addEventListener('scroll', onScroll))
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
+const isMobile = ref(false)
+function checkMobile() { isMobile.value = window.innerWidth <= 640 }
+onMounted(() => { checkMobile(); window.addEventListener('resize', checkMobile) })
+onUnmounted(() => window.removeEventListener('resize', checkMobile))
+
 const plans      = ref([])
 const allRecipes = ref([])
 const loading    = ref(true)
@@ -59,6 +64,19 @@ const showCreate  = ref(false)
 const creating    = ref(false)
 const createError = ref('')
 const newPlan     = ref({ name: '', weekStartDate: '', notes: '' })
+
+function snapToMonday(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay()
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
+function onWeekDateChange(e) {
+  newPlan.value.weekStartDate = e.target.value ? snapToMonday(e.target.value) : ''
+}
 
 function resetCreate() {
   newPlan.value = { name: '', weekStartDate: '', notes: '' }
@@ -234,11 +252,14 @@ function resetEntry() {
   recipeSearch.value = ''
 }
 
+const entryPrefilled = ref(false)
+
 function openEntryModal(planId, prefilledDay, prefilledMeal) {
   entryPlanId.value = planId
   resetEntry()
   if (prefilledDay)  newEntry.value.dayOfWeek = prefilledDay
   if (prefilledMeal) newEntry.value.mealType  = prefilledMeal
+  entryPrefilled.value = !!(prefilledDay && prefilledMeal)
   showEntry.value = true
 }
 
@@ -257,14 +278,13 @@ async function addEntry() {
   if (!newEntry.value.recipeId) return
   addingEntry.value = true
   try {
-    await mealPlansApi.addEntry(entryPlanId.value, {
+    const entryRes = await mealPlansApi.addEntry(entryPlanId.value, {
       recipeId:  newEntry.value.recipeId,
       dayOfWeek: newEntry.value.dayOfWeek,
       mealType:  newEntry.value.mealType,
       servings:  newEntry.value.servings,
     })
-    const planRes   = await mealPlansApi.getById(entryPlanId.value)
-    const updatedPlan = planRes.data?.data ?? planRes.data
+    const updatedPlan = entryRes.data?.data ?? entryRes.data
     const idx = plans.value.findIndex(p => p.id === entryPlanId.value)
     if (idx !== -1) plans.value[idx] = updatedPlan
     showEntry.value = false
@@ -400,14 +420,11 @@ async function applyRandom() {
       }
     }
 
-    // API ga ketma-ket yuboramiz
+    let lastRes
     for (const entry of toAdd) {
-      await mealPlansApi.addEntry(randomPlanId.value, entry)
+      lastRes = await mealPlansApi.addEntry(randomPlanId.value, entry)
     }
-
-    // Rejani yangilaymiz
-    const planRes = await mealPlansApi.getById(randomPlanId.value)
-    const updatedPlan = planRes.data?.data ?? planRes.data
+    const updatedPlan = lastRes.data?.data ?? lastRes.data
     const idx = plans.value.findIndex(p => p.id === randomPlanId.value)
     if (idx !== -1) plans.value[idx] = updatedPlan
 
@@ -421,19 +438,10 @@ async function applyRandom() {
 }
 
 // ── Delete entry ───────────────────────────────────────────────────────
-const confirmEntryDelete = ref({ show: false, planId: null, entryId: null })
-
-function askDeleteEntry(planId, entryId) {
-  confirmEntryDelete.value = { show: true, planId, entryId }
-}
-
-async function doDeleteEntry() {
-  const { planId, entryId } = confirmEntryDelete.value
-  confirmEntryDelete.value.show = false
+async function doDeleteEntry(planId, entryId) {
   try {
-    await mealPlansApi.removeEntry(planId, entryId)
-    const planRes = await mealPlansApi.getById(planId)
-    const updatedPlan = planRes.data?.data ?? planRes.data
+    const delRes = await mealPlansApi.removeEntry(planId, entryId)
+    const updatedPlan = delRes.data?.data ?? delRes.data
     const idx = plans.value.findIndex(p => p.id === planId)
     if (idx !== -1) plans.value[idx] = updatedPlan
     toast.success("Ovqat o'chirildi!")
@@ -469,11 +477,11 @@ function weekRelativeLabel(plan) {
   const planStart = new Date(plan.weekStartDate + 'T00:00:00')
   const diff = Math.round((planStart - monday) / (7 * 24 * 60 * 60 * 1000))
 
-  if (diff === 0)  return 'Bu hafta'
-  if (diff === 1)  return 'Keyingi hafta'
-  if (diff === -1) return 'O\'tgan hafta'
-  if (diff > 1)   return `${diff} hafta keyin`
-  return `${Math.abs(diff)} hafta oldin`
+  if (diff === 0)  return lang.t('shop.this_week')
+  if (diff === 1)  return lang.t('shop.next_week')
+  if (diff === -1) return lang.t('shop.last_week')
+  if (diff > 1)   return `${diff} ${lang.t('shop.weeks_later')}`
+  return `${Math.abs(diff)} ${lang.t('shop.weeks_ago')}`
 }
 
 // ── Load ────────────────────────────────────────────────────────────────
@@ -544,7 +552,7 @@ async function load() {
               </svg>
               {{ formatDate(plan.weekStartDate) }} — {{ formatDate(plan.weekEndDate) }}
               <span class="dot-sep">·</span>
-              <span class="entry-count">{{ plan.entries?.length || 0 }} ta ovqat</span>
+              <span class="entry-count">{{ plan.entries?.length || 0 }} {{ lang.t('meal.meals_count') }}</span>
             </p>
           </div>
 
@@ -580,7 +588,61 @@ async function load() {
         <!-- Weekly grid -->
         <Transition name="expand">
           <div v-if="expanded === plan.id" class="weekly-grid-wrap">
-            <div class="weekly-grid">
+
+            <!-- Mobile: kunlar vertikal -->
+            <div v-if="isMobile" class="mobile-week">
+              <div
+                v-for="(dayName, di) in DAYS"
+                :key="'mob'+dayName"
+                class="mobile-day"
+                :class="{ 'mobile-day--today': isToday(plan, di) }"
+              >
+                <div class="mobile-day-header">
+                  <span class="mobile-day-label">{{ dayShort[di] }}</span>
+                  <span class="mobile-day-date">{{ dayDate(plan, di) }} {{ dayMonth(plan, di) }}</span>
+                </div>
+                <div class="mobile-meals">
+                  <div v-for="mealType in ['BREAKFAST','LUNCH','DINNER']" :key="mealType" class="mobile-meal-slot">
+                    <div
+                      v-for="entry in entriesForDay(plan, dayName).filter(e => e.mealType === mealType).slice(0,1)"
+                      :key="entry.id"
+                      class="slot-card"
+                      :class="{ 'slot-card--img': entry.recipeImageUrl }"
+                      :style="entry.recipeImageUrl ? {
+                        backgroundImage: `url(${resolveImageUrl(entry.recipeImageUrl)})`,
+                        borderColor: MEAL_COLORS[mealType]?.border,
+                      } : {
+                        background: MEAL_COLORS[mealType]?.bg,
+                        borderColor: MEAL_COLORS[mealType]?.border,
+                      }"
+                    >
+                      <div v-if="entry.recipeImageUrl" class="slot-img-overlay" />
+                      <span class="slot-name">{{ lang.recipeTitle({ titleUz: entry.recipeTitleUz, titleRu: entry.recipeTitleRu, titleEng: entry.recipeTitleEng }) }}</span>
+                      <div class="slot-actions">
+                        <button class="slot-btn slot-btn--edit" @click.stop="openEntryModal(plan.id, dayName, mealType)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        </button>
+                        <button class="slot-btn slot-btn--del" @click.stop="doDeleteEntry(plan.id, entry.id)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      v-if="entriesForDay(plan, dayName).filter(e => e.mealType === mealType).length === 0"
+                      class="cell-empty-hint"
+                      @click.stop="openEntryModal(plan.id, dayName, mealType)"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Desktop grid -->
+            <div v-else class="weekly-grid">
 
               <!-- Corner -->
               <div class="grid-corner"></div>
@@ -608,34 +670,35 @@ async function load() {
                   class="day-cell"
                   :class="{ 'day-cell--today': isToday(plan, di) }"
                 >
+                  <!-- Ovqat bor -->
                   <div
-                    v-for="entry in entriesForDay(plan, dayName).filter(e => e.mealType === mealType)"
+                    v-for="entry in entriesForDay(plan, dayName).filter(e => e.mealType === mealType).slice(0,1)"
                     :key="entry.id"
-                    class="entry-chip"
-                    :style="{
+                    class="slot-card"
+                    :class="{ 'slot-card--img': entry.recipeImageUrl }"
+                    :style="entry.recipeImageUrl ? {
+                      backgroundImage: `url(${resolveImageUrl(entry.recipeImageUrl)})`,
+                      borderColor: MEAL_COLORS[mealType]?.border,
+                    } : {
                       background: MEAL_COLORS[mealType]?.bg,
                       borderColor: MEAL_COLORS[mealType]?.border,
                     }"
                   >
-                    <div class="chip-body">
-                      <span class="entry-recipe" :title="entry.recipeTitleUz">
-                        {{ entry.recipeTitleUz || entry.recipeTitleRu }}
-                      </span>
-                      <span v-if="entry.servings > 1" class="entry-servings">
-                        {{ entry.servings }} porsiya
-                      </span>
+                    <div v-if="entry.recipeImageUrl" class="slot-img-overlay" />
+                    <span class="slot-name" :title="lang.recipeTitle({ titleUz: entry.recipeTitleUz, titleRu: entry.recipeTitleRu, titleEng: entry.recipeTitleEng })">
+                      {{ lang.recipeTitle({ titleUz: entry.recipeTitleUz, titleRu: entry.recipeTitleRu, titleEng: entry.recipeTitleEng }) }}
+                    </span>
+                    <span v-if="entry.servings > 1" class="slot-servings">{{ entry.servings }} porsiya</span>
+                    <div class="slot-actions">
+                      <button class="slot-btn slot-btn--edit" @click.stop="openEntryModal(plan.id, dayName, mealType)" title="Almashtirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      </button>
+                      <button class="slot-btn slot-btn--del" @click.stop="doDeleteEntry(plan.id, entry.id)" title="O'chirish">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
                     </div>
-                    <button
-                      class="entry-del"
-                      @click.stop="askDeleteEntry(plan.id, entry.id)"
-                      title="O'chirish"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
-                      </svg>
-                    </button>
                   </div>
-                  <!-- Bo'sh katak placeholder -->
+                  <!-- Bo'sh katak -->
                   <div
                     v-if="entriesForDay(plan, dayName).filter(e => e.mealType === mealType).length === 0"
                     class="cell-empty-hint"
@@ -646,21 +709,11 @@ async function load() {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
                     </svg>
                   </div>
-                  <!-- Entry bo'lganida qo'shimcha qo'shish tugmasi -->
-                  <button
-                    v-if="entriesForDay(plan, dayName).filter(e => e.mealType === mealType).length > 0"
-                    class="cell-add-btn"
-                    @click.stop="openEntryModal(plan.id, dayName, mealType)"
-                    :title="`${mealLabel[mealType]} qo'shish`"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M5 12h14"/>
-                    </svg>
-                  </button>
                 </div>
 
               </template>
-            </div>
+            </div><!-- /weekly-grid -->
+
             <!-- Legend -->
             <div class="grid-legend">
               <span v-for="(color, mt) in MEAL_COLORS" :key="mt" class="legend-item">
@@ -708,7 +761,7 @@ async function load() {
               </div>
               <div class="form-group">
                 <label class="form-label">{{ lang.t('meal.week_start') }} <span class="req">*</span></label>
-                <input v-model="newPlan.weekStartDate" type="date" class="form-input" />
+                <input :value="newPlan.weekStartDate" type="date" class="form-input" @change="onWeekDateChange" />
                 <p class="form-hint">Hafta Dushanbadan boshlanishi tavsiya etiladi</p>
               </div>
               <div class="form-group">
@@ -881,7 +934,7 @@ async function load() {
               </div>
 
               <!-- Day + Meal type -->
-              <div class="form-row">
+              <div v-if="!entryPrefilled" class="form-row">
                 <div class="form-group">
                   <label class="form-label">{{ lang.t('meal.day') }}</label>
                   <select v-model="newEntry.dayOfWeek" class="form-input">
@@ -898,35 +951,17 @@ async function load() {
                 </div>
               </div>
 
-              <!-- Meal type color preview -->
-              <div
-                class="meal-preview"
-                :style="{
-                  background: MEAL_COLORS[newEntry.mealType]?.bg,
-                  borderColor: MEAL_COLORS[newEntry.mealType]?.border,
-                  color: MEAL_COLORS[newEntry.mealType]?.text,
-                }"
-              >
-                <span class="meal-dot" :style="{ background: MEAL_COLORS[newEntry.mealType]?.dot }" />
-                {{ mealLabel[newEntry.mealType] }} · {{ dayLabel[DAYS.indexOf(newEntry.dayOfWeek)] }}
-              </div>
-
               <!-- Servings -->
               <div class="form-group">
                 <label class="form-label">{{ lang.t('meal.servings_lbl') }}</label>
-                <div class="servings-control">
-                  <button
-                    class="srv-btn"
-                    @click="newEntry.servings = Math.max(1, newEntry.servings - 1)"
-                    :disabled="newEntry.servings <= 1"
-                  >−</button>
-                  <span class="srv-val">{{ newEntry.servings }}</span>
-                  <button
-                    class="srv-btn"
-                    @click="newEntry.servings = Math.min(20, newEntry.servings + 1)"
-                  >+</button>
-                  <span class="srv-label">porsiya</span>
-                </div>
+                <input
+                  type="number"
+                  v-model.number="newEntry.servings"
+                  min="1"
+                  max="20"
+                  class="form-input"
+                  style="width: 100px"
+                />
               </div>
 
             </div>
@@ -1060,14 +1095,6 @@ async function load() {
       @cancel="confirmDelete.show = false"
     />
 
-    <ConfirmModal
-      :show="confirmEntryDelete.show"
-      message="Ushbu ovqatni o'chirmoqchimisiz?"
-      confirm-label="Ha, o'chirish"
-      danger
-      @confirm="doDeleteEntry"
-      @cancel="confirmEntryDelete.show = false"
-    />
 
     <!-- Floating action button — scroll qilinganda ko'rinadi -->
     <Teleport to="body">
@@ -1234,8 +1261,8 @@ async function load() {
   display: grid;
   grid-template-columns: 80px repeat(7, minmax(100px, 1fr));
   gap: 1px;
-  background: var(--bd);
-  border: 1px solid var(--bd);
+  background: var(--bd-md);
+  border: 1px solid var(--bd-md);
   border-radius: 14px;
   overflow: hidden;
   min-width: 780px;
@@ -1306,91 +1333,100 @@ async function load() {
   position: relative;
 }
 
-/* Entry chip */
-.entry-chip {
-  position: relative;
-  border-radius: 7px;
-  border-width: 1px;
-  border-style: solid;
-  padding: 5px 22px 5px 7px;
+/* Slot card — 1 ta ovqat to'liq katakni egallaydi */
+.slot-card {
+  flex: 1;
+  border-radius: 9px;
+  border: 1px solid;
+  padding: 8px 10px;
   display: flex;
-  align-items: flex-start;
-  gap: 5px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  position: relative;
+  overflow: hidden;
   transition: filter 0.15s;
 }
-.entry-chip:hover { filter: brightness(1.05); }
-.chip-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.entry-recipe   { font-size: 10px; font-weight: 700; color: var(--tx-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.entry-servings { font-size: 9px; color: var(--tx-4); font-weight: 600; }
-
-.entry-del {
+.slot-card:hover { filter: brightness(1.06); }
+.slot-card--img {
+  background-size: cover;
+  background-position: center;
+}
+.slot-img-overlay {
   position: absolute;
-  top: 3px; right: 3px;
-  width: 16px; height: 16px;
-  border: none;
-  background: rgba(239,68,68,0.12);
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 0;
+  inset: 0;
+  border-radius: 9px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.62) 100%);
+}
+.slot-card--img .slot-name    { position: relative; z-index: 1; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.slot-card--img .slot-servings { position: relative; z-index: 1; color: rgba(255,255,255,0.75); }
+.slot-card--img .slot-actions  { z-index: 2; }
+.slot-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx-2);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+}
+.slot-servings { font-size: 9px; color: var(--tx-4); font-weight: 600; margin-top: 1px; }
+
+.slot-actions {
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  background: rgba(0,0,0,0.52);
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
+  transition: opacity 0.15s;
 }
-.entry-del svg { width: 9px; height: 9px; color: #ef4444; }
-.entry-chip:hover .entry-del { opacity: 1; }
-.entry-del:hover { background: rgba(239,68,68,0.25); }
+.slot-card:hover .slot-actions { opacity: 1; }
+.slot-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.12s;
+}
+.slot-btn:hover { transform: scale(1.12); }
+.slot-btn--edit { background: rgba(255,255,255,0.22); color: #fff; }
+.slot-btn--edit:hover { background: rgba(255,255,255,0.38); }
+.slot-btn--del  { background: rgba(239,68,68,0.75); color: #fff; }
+.slot-btn--del:hover { background: rgba(239,68,68,0.95); }
+.slot-btn svg { width: 13px; height: 13px; }
 
-/* Bo'sh katak placeholder — doim ko'rinadi */
+/* Bo'sh katak placeholder */
 .cell-empty-hint {
   width: 100%;
   flex: 1;
-  min-height: 44px;
-  border-radius: 7px;
-  border: 1.5px dashed rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.02);
-  color: var(--tx-6);
+  min-height: 52px;
+  border-radius: 9px;
+  border: 1.5px dashed var(--bd-xl);
+  background: var(--bg-card-md);
+  color: var(--tx-4);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
 }
-.cell-empty-hint svg { width: 13px; height: 13px; opacity: 0.35; }
-.day-cell:hover .cell-empty-hint {
-  border-color: rgba(216,90,48,0.3);
-  background: rgba(216,90,48,0.04);
-  color: #E8713E;
-}
-.day-cell:hover .cell-empty-hint svg { opacity: 0.7; }
+.cell-empty-hint svg { width: 14px; height: 14px; opacity: 0.45; }
 .cell-empty-hint:hover {
-  border-color: rgba(216,90,48,0.45) !important;
-  background: rgba(216,90,48,0.08) !important;
-}
-
-/* Katak qo'shish tugmasi (entry bo'lgan katak uchun) */
-.cell-add-btn {
-  width: 100%;
-  min-height: 28px;
-  border-radius: 6px;
-  border: 1.5px dashed var(--bd-lg);
-  background: none;
-  color: var(--tx-6);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.15s;
-}
-.day-cell:hover .cell-add-btn { opacity: 1; }
-.cell-add-btn svg { width: 12px; height: 12px; }
-.cell-add-btn:hover {
-  border-color: rgba(216,90,48,0.35);
-  background: rgba(216,90,48,0.05);
+  border-color: rgba(216,90,48,0.45);
+  background: rgba(216,90,48,0.06);
   color: #E8713E;
 }
+.cell-empty-hint:hover svg { opacity: 0.8; }
 
 /* Legend */
 .grid-legend {
@@ -1466,7 +1502,7 @@ async function load() {
   box-shadow: 0 40px 80px rgba(0,0,0,0.6);
   overflow: hidden;
 }
-.modal-box--entry { max-width: 520px; }
+.modal-box--entry { max-width: 520px; overflow: visible; }
 
 .modal-header {
   display: flex;
@@ -1915,25 +1951,68 @@ async function load() {
   /* Form row — ustma-ust */
   .form-row { grid-template-columns: 1fr; gap: 10px; }
 
-  /* Grid — horizontal scroll with scroll snap */
-  .weekly-grid-wrap { padding: 0 0 16px; }
-  .weekly-grid {
-    grid-template-columns: 52px repeat(7, minmax(90px, 1fr));
-    min-width: 680px;
-    gap: 1px;
-    border-radius: 0;
-    border-left: none;
-    border-right: none;
+  /* Mobile week — vertikal kunlar */
+  .mobile-week { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+  .mobile-day {
+    border-radius: 14px;
+    border: 1px solid var(--bd-md);
+    background: var(--bg-surface);
+    overflow: hidden;
   }
-  .day-num        { font-size: 15px; }
-  .day-short      { font-size: 9px; }
-  .meal-row-label { min-height: 52px; padding: 4px 2px; }
-  .meal-row-name  { font-size: 8px; }
-  .day-cell       { min-height: 52px; padding: 4px; }
-  .cell-add-btn   { min-height: 36px; }
-  .entry-recipe   { font-size: 9px; }
+  .mobile-day--today { border-color: #E8713E; }
+  .mobile-day-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--bd);
+  }
+  .mobile-day-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--tx-4);
+    text-transform: uppercase;
+  }
+  .mobile-day--today .mobile-day-label { color: #E8713E; }
+  .mobile-day-date { font-size: 13px; font-weight: 700; color: var(--tx-2); }
+  .mobile-meals {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+  .mobile-meal-slot { display: flex; flex-direction: column; }
+  .mobile-meal-slot .slot-card { min-height: 64px; }
+  .mobile-meal-slot .cell-empty-hint { min-height: 64px; border-radius: 9px; }
 
   /* FAB scroll qilib tushganda ko'rinsin */
   .fab-new-plan { bottom: 20px; right: 16px; padding: 11px 16px; font-size: 12px; }
 }
+
+/* ── Dark mode grid ko'rinishi ── */
+[data-theme="dark"] .plan-card   { border-color: rgba(255,255,255,0.10); }
+[data-theme="dark"] .weekly-grid { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.10); }
+
+[data-theme="dark"] .grid-corner,
+[data-theme="dark"] .day-header,
+[data-theme="dark"] .meal-row-label { background: rgba(255,255,255,0.06); }
+
+[data-theme="dark"] .day-cell       { background: rgba(255,255,255,0.02); }
+
+[data-theme="dark"] .day-short,
+[data-theme="dark"] .day-mon        { color: #94a3b8; }
+
+[data-theme="dark"] .cell-empty-hint {
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8;
+}
+[data-theme="dark"] .cell-empty-hint svg { opacity: 0.6; }
+[data-theme="dark"] .slot-name      { color: #e2e8f0; }
+[data-theme="dark"] .slot-servings  { color: #94a3b8; }
+
+[data-theme="dark"] .legend-item    { color: #94a3b8; }
+[data-theme="dark"] .week-rel-badge { color: #94a3b8; border-color: rgba(255,255,255,0.12); }
+[data-theme="dark"] .plan-dates     { color: #64748b; }
+[data-theme="dark"] .chevron svg    { color: #64748b; }
 </style>

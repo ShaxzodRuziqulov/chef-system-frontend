@@ -65,7 +65,9 @@ watch(() => favorites.count, (newCount, oldCount) => {
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="page-head">
       <div class="page-title-row">
-        <div class="page-icon">❤️</div>
+        <div class="page-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/></svg>
+        </div>
         <div>
           <h1 class="page-title">{{ lang.t('nav.saved') }}</h1>
           <p class="page-sub">{{ subText }}</p>
@@ -111,7 +113,7 @@ watch(() => favorites.count, (newCount, oldCount) => {
       <!-- Load more -->
       <div v-if="page + 1 < totalPages" class="load-more-wrap">
         <button class="load-more-btn" :disabled="loading" @click="loadMore">
-          <span v-if="loading" class="spin-icon">⏳</span>
+          <span v-if="loading" class="btn-spinner" />
           <span v-else>{{ lang.t('saved.load_more') }}</span>
           <span class="load-hint">{{ recipes.length }} / {{ total }}</span>
         </button>
@@ -146,12 +148,13 @@ watch(() => favorites.count, (newCount, oldCount) => {
   height: 48px;
   border-radius: 14px;
   background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
   flex-shrink: 0;
 }
+.page-icon svg { width: 24px; height: 24px; }
 .page-title {
   font-size: 22px;
   font-weight: 800;
@@ -179,7 +182,7 @@ watch(() => favorites.count, (newCount, oldCount) => {
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 .sk-img {
-  aspect-ratio: 4/3;
+  aspect-ratio: 3/2;
   background: linear-gradient(90deg, var(--bg-input) 25%, var(--bd-md) 50%, var(--bg-input) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
@@ -271,6 +274,12 @@ watch(() => favorites.count, (newCount, oldCount) => {
   color: var(--tx-5);
   font-weight: 600;
 }
+.btn-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--bd-xl); border-top-color: var(--tx-3);
+  border-radius: 50%; animation: spin 0.65s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 640px) {
   .recipe-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }

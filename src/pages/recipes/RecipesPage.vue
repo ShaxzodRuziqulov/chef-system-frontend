@@ -424,10 +424,36 @@ watch(() => route.query.keyword, (kw) => {
 @media (max-width: 1200px) { .recipe-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 768px)  { .recipe-grid { grid-template-columns: repeat(2, 1fr); } }
 
+@media (max-width: 600px) {
+  .filters-block { padding: 12px 14px; gap: 10px; }
+  .page-title { font-size: 18px; }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .filter-group-label { min-width: unset; }
+
+  /* chips row mobileda to'liq kenglik + scroll ishlashi uchun */
+  .chips-row { width: 100%; }
+  .chips-scroll {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .recipe-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+}
+
 /* Skeleton */
 .skeleton-card {
   border-radius: 20px;
-  height: 220px;
+  aspect-ratio: 3/2;
   background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }

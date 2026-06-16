@@ -436,4 +436,9 @@ onMounted(() => { auth.clearError(); serverError.value = null })
   text-transform: uppercase;
   font-weight: 700;
 }
+
+@media (max-width: 480px) {
+  .register-page { padding: 12px; }
+  .card { padding: 28px 20px 36px; border-radius: 20px; }
+}
 </style>

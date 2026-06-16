@@ -235,8 +235,19 @@ const ingSaving      = ref(false)
 const ingLoading     = ref(false)
 const ingModalVisible = ref(false)
 
+const INGREDIENT_CATEGORIES = [
+  { value: 'MEAT',      label: '🥩 Go\'sht' },
+  { value: 'VEGETABLE', label: '🥕 Sabzavot' },
+  { value: 'FRUIT',     label: '🍎 Mevalar' },
+  { value: 'GRAIN',     label: '🌾 Don mahsulotlari' },
+  { value: 'DAIRY',     label: '🥛 Sut mahsulotlari' },
+  { value: 'SPICE',     label: '🌶️ Ziravorlar' },
+  { value: 'OIL',       label: '🫒 Yog\' va souslar' },
+  { value: 'OTHER',     label: '📦 Boshqa' },
+]
+
 function emptyIngForm() {
-  return { nameUz: '', nameRu: '', nameEng: '', imageUrl: '', defaultUnit: '', allergen: false }
+  return { nameUz: '', nameRu: '', nameEng: '', imageUrl: '', defaultUnit: '', allergen: false, category: '' }
 }
 
 function openAddIng() {
@@ -271,7 +282,7 @@ async function loadIngredients() {
 
 function editIng(i) {
   ingEditing.value = i
-  ingForm.value = { nameUz: i.nameUz || '', nameRu: i.nameRu || '', nameEng: i.nameEng || '', imageUrl: i.imageUrl || '', defaultUnit: i.defaultUnit || '', allergen: i.allergen || false }
+  ingForm.value = { nameUz: i.nameUz || '', nameRu: i.nameRu || '', nameEng: i.nameEng || '', imageUrl: i.imageUrl || '', defaultUnit: i.defaultUnit || '', allergen: i.allergen || false, category: i.category || '' }
   ingModalVisible.value = true
 }
 
@@ -291,6 +302,7 @@ async function saveIng() {
     imageUrl: ingForm.value.imageUrl || undefined,
     defaultUnit: ingForm.value.defaultUnit || undefined,
     allergen: ingForm.value.allergen,
+    category: ingForm.value.category || undefined,
   }
   try {
     if (ingEditing.value) {
@@ -623,31 +635,31 @@ async function exportRecipes() {
 
     <!-- Stats -->
     <div class="stats-row">
-      <div class="stat-card">
+      <button class="stat-card" @click="activeTab = 'recipes'">
         <div class="sc-icon">🍽️</div>
         <div class="sc-val">{{ stats.total }}</div>
         <div class="sc-lbl">{{ lang.t('admin.total_recipes') }}</div>
-      </div>
-      <div class="stat-card">
+      </button>
+      <button class="stat-card" @click="activeTab = 'categories'">
         <div class="sc-icon">🏷️</div>
         <div class="sc-val">{{ stats.cats }}</div>
         <div class="sc-lbl">{{ lang.t('admin.categories') }}</div>
-      </div>
-      <div class="stat-card">
+      </button>
+      <button class="stat-card" @click="activeTab = 'tags'">
         <div class="sc-icon">🔖</div>
         <div class="sc-val">{{ stats.tags }}</div>
         <div class="sc-lbl">{{ lang.t('admin.tags') }}</div>
-      </div>
-      <div class="stat-card">
+      </button>
+      <button class="stat-card" @click="activeTab = 'ingredients'">
         <div class="sc-icon">🥕</div>
         <div class="sc-val">{{ stats.ings }}</div>
         <div class="sc-lbl">{{ lang.t('admin.ingredients') }}</div>
-      </div>
-      <div class="stat-card">
+      </button>
+      <button class="stat-card" @click="activeTab = 'users'">
         <div class="sc-icon">👥</div>
         <div class="sc-val">{{ stats.users }}</div>
         <div class="sc-lbl">{{ lang.t('admin.total_users') }}</div>
-      </div>
+      </button>
     </div>
 
     <!-- Tabs -->
@@ -851,6 +863,7 @@ async function exportRecipes() {
             <span v-if="ing.nameUz && lang.lang !== 'uz'" class="crud-sub">{{ ing.nameUz }}</span>
           </div>
           <div class="ing-badges">
+            <span v-if="ing.category" class="ing-cat-badge">{{ INGREDIENT_CATEGORIES.find(c => c.value === ing.category)?.label }}</span>
             <span v-if="ing.defaultUnit" class="ing-unit-badge">{{ unitLabel(ing.defaultUnit) }}</span>
             <span v-if="ing.allergen" class="ing-allergen">{{ lang.t('admin.allergen') }}</span>
           </div>
@@ -1244,6 +1257,13 @@ async function exportRecipes() {
                     <option v-for="u in UNITS" :key="u" :value="u">{{ unitLabel(u) }}</option>
                   </select>
                 </div>
+                <div class="imf-group">
+                  <label class="imf-label">Kategoriya</label>
+                  <select v-model="ingForm.category" class="imf-input imf-select">
+                    <option value="">— Tanlang —</option>
+                    <option v-for="c in INGREDIENT_CATEGORIES" :key="c.value" :value="c.value">{{ c.label }}</option>
+                  </select>
+                </div>
                 <label class="imf-check-row">
                   <div class="imf-toggle" :class="{ 'imf-toggle-on': ingForm.allergen }" @click="ingForm.allergen = !ingForm.allergen">
                     <div class="imf-toggle-thumb" />
@@ -1404,8 +1424,9 @@ async function exportRecipes() {
 
 /* Stats */
 .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.stat-card { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: border-color 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.06); min-width: 0; overflow: hidden; }
-.stat-card:hover { border-color: rgba(216,90,48,0.2); }
+.stat-card { background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s; box-shadow: 0 1px 4px rgba(0,0,0,0.06); min-width: 0; overflow: hidden; cursor: pointer; text-align: center; }
+.stat-card:hover { border-color: rgba(216,90,48,0.35); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); }
+.stat-card:active { transform: translateY(0); }
 .sc-icon { font-size: 24px; }
 .sc-val  { font-size: 24px; font-weight: 900; color: var(--tx-1); }
 .sc-lbl  { font-size: 11px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; text-align: center; word-break: break-word; line-height: 1.2; }
@@ -1938,5 +1959,12 @@ async function exportRecipes() {
 @media (max-width: 480px) {
   .btn-bulk-import, .btn-bulk-export { padding: 0 10px; font-size: 12px; }
   .brt-head, .brt-row { grid-template-columns: 40px 1fr 44px 1fr; }
+}
+
+.ing-cat-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  background: rgba(var(--accent-rgb, 232,113,62), 0.12); color: var(--accent, #E8713E);
+  white-space: nowrap;
 }
 </style>

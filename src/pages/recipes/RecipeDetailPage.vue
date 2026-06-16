@@ -12,7 +12,7 @@ import { commentsApi }                     from '@/api/comments'
 import RecipeFormModal                     from '@/components/recipe/RecipeFormModal.vue'
 import ConfirmModal                        from '@/components/ui/ConfirmModal.vue'
 import { resolveImageUrl }                 from '@/utils/imageUrl'
-import { formatDate }                     from '@/utils/formatDate'
+import { formatDate }                      from '@/utils/formatDate'
 
 const route     = useRoute()
 const router    = useRouter()
@@ -22,20 +22,17 @@ const units     = useUnitsStore()
 const favorites = useFavoritesStore()
 const toast     = useToast()
 
-function requireAuth(msg) {
-  toast.warning(msg)
-}
+function requireAuth(msg) { toast.warning(msg) }
 
-const recipe          = ref(null)
-const loading         = ref(true)
-const tab             = ref('ingredients')
-const activeGalleryIdx = ref(null)  // gallery fullview uchun
+const recipe           = ref(null)
+const loading          = ref(true)
+const tab              = ref('ingredients')
+const activeGalleryIdx = ref(null)
 
 function scrollToVideo() {
   document.getElementById('recipe-video')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-// YouTube embed — iframe orqali ishlaydi
 function getEmbedUrl(url) {
   if (!url) return null
   const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/)
@@ -49,6 +46,33 @@ function isLocalVideo(url) {
   if (url.includes('youtube') || url.includes('youtu.be')) return false
   return url.startsWith('/uploads/') || url.startsWith('http')
 }
+
+// ── Serving scaler ────────────────────────────────────────────────
+const servings = ref(0)
+watch(() => recipe.value?.servings, (v) => { if (v) servings.value = v }, { immediate: true })
+
+function scaleAmount(amount) {
+  if (!recipe.value?.servings || !servings.value || !amount) return amount
+  return +(amount * servings.value / recipe.value.servings).toFixed(2)
+}
+
+function changeServings(delta) {
+  const next = servings.value + delta
+  if (next >= 1 && next <= 50) servings.value = next
+}
+
+// ── Cooking mode — checked ingredients ───────────────────────────
+const checkedIngs = ref(new Set())
+function toggleIngCheck(id) {
+  const s = new Set(checkedIngs.value)
+  s.has(id) ? s.delete(id) : s.add(id)
+  checkedIngs.value = s
+}
+const allChecked = computed(() =>
+  recipe.value?.ingredients?.length > 0 &&
+  recipe.value.ingredients.every(i => checkedIngs.value.has(i.id))
+)
+function resetChecked() { checkedIngs.value = new Set() }
 
 // ── Modal / actions ───────────────────────────────────────────────
 const showFormModal   = ref(false)
@@ -79,7 +103,7 @@ function handleSaved(updated) {
   tab.value = 'ingredients'
 }
 
-// ── Difficulty map ────────────────────────────────────────────────
+// ── Difficulty ────────────────────────────────────────────────────
 const diffMap = computed(() => ({
   EASY:   { label: lang.t('common.easy'),   cls: 'diff-easy'   },
   MEDIUM: { label: lang.t('common.medium'), cls: 'diff-medium' },
@@ -88,41 +112,28 @@ const diffMap = computed(() => ({
 
 // ── Favorites ─────────────────────────────────────────────────────
 const favLoading = ref(false)
-
-const isFaved = computed(() =>
-  recipe.value ? favorites.isFavorited(recipe.value.id) : false
-)
+const isFaved = computed(() => recipe.value ? favorites.isFavorited(recipe.value.id) : false)
 
 async function toggleFav() {
-  if (!auth.isAuthenticated) {
-    requireAuth("Sevimlilarga qo'shish uchun tizimga kiring")
-    return
-  }
+  if (!auth.isAuthenticated) { requireAuth("Sevimlilarga qo'shish uchun tizimga kiring"); return }
   if (favLoading.value) return
   favLoading.value = true
-  try {
-    await favorites.toggle(recipe.value.id)
-  } finally {
-    favLoading.value = false
-  }
+  try { await favorites.toggle(recipe.value.id) }
+  finally { favLoading.value = false }
 }
 
 // ── Rating ────────────────────────────────────────────────────────
-const myScore      = ref(0)
-const hoverScore   = ref(0)
-const ratingCount  = ref(0)
-const avgRating    = ref(0)
+const myScore       = ref(0)
+const hoverScore    = ref(0)
+const ratingCount   = ref(0)
+const avgRating     = ref(0)
 const ratingLoading = ref(false)
 
 async function loadRating(recipeId) {
   try {
     const res = await ratingsApi.getMyRating(recipeId)
     const d   = res.data?.data
-    if (d) {
-      myScore.value     = d.myScore
-      avgRating.value   = d.averageRating
-      ratingCount.value = d.ratingCount
-    }
+    if (d) { myScore.value = d.myScore; avgRating.value = d.averageRating; ratingCount.value = d.ratingCount }
   } catch { /* ignore */ }
 }
 
@@ -134,18 +145,10 @@ async function submitRating(score) {
     const res = await ratingsApi.rate(recipe.value.id, score)
     const d   = res.data?.data
     if (d) {
-      myScore.value     = d.myScore
-      avgRating.value   = d.averageRating
-      ratingCount.value = d.ratingCount
-      // Sync displayed rating on recipe card
-      if (recipe.value) {
-        recipe.value.averageRating = d.averageRating
-        recipe.value.ratingCount   = d.ratingCount
-      }
+      myScore.value = d.myScore; avgRating.value = d.averageRating; ratingCount.value = d.ratingCount
+      if (recipe.value) { recipe.value.averageRating = d.averageRating; recipe.value.ratingCount = d.ratingCount }
     }
-  } catch { /* ignore */ } finally {
-    ratingLoading.value = false
-  }
+  } catch { /* ignore */ } finally { ratingLoading.value = false }
 }
 
 // ── Comments ──────────────────────────────────────────────────────
@@ -158,22 +161,19 @@ const newComment    = ref('')
 const submitting    = ref(false)
 
 async function loadComments(reset = false) {
-  if (!recipe.value) return
-  if (commentsLoad.value) return
+  if (!recipe.value || commentsLoad.value) return
   if (reset) { commentsPage.value = 0; commentsLast.value = false; comments.value = [] }
   commentsLoad.value = true
   try {
     const res = await commentsApi.getAll(recipe.value.id, { page: commentsPage.value, size: 15 })
     const d   = res.data?.data
     if (d) {
-      comments.value    = reset ? d.content : [...comments.value, ...d.content]
+      comments.value      = reset ? d.content : [...comments.value, ...d.content]
       commentsTotal.value = d.totalElements
       commentsLast.value  = d.last
       commentsPage.value++
     }
-  } catch { /* ignore */ } finally {
-    commentsLoad.value = false
-  }
+  } catch { /* ignore */ } finally { commentsLoad.value = false }
 }
 
 async function submitComment() {
@@ -184,21 +184,16 @@ async function submitComment() {
   try {
     const res = await commentsApi.add(recipe.value.id, text)
     const c   = res.data?.data
-    if (c) {
-      comments.value = [c, ...comments.value]
-      commentsTotal.value++
-    }
+    if (c) { comments.value = [c, ...comments.value]; commentsTotal.value++ }
     newComment.value = ''
-  } catch { /* ignore */ } finally {
-    submitting.value = false
-  }
+  } catch { /* ignore */ } finally { submitting.value = false }
 }
 
 async function deleteComment(commentId) {
   if (!confirm('Izohni o\'chirishni tasdiqlaysizmi?')) return
   try {
     await commentsApi.delete(recipe.value.id, commentId)
-    comments.value  = comments.value.filter(c => c.id !== commentId)
+    comments.value = comments.value.filter(c => c.id !== commentId)
     commentsTotal.value--
   } catch { /* ignore */ }
 }
@@ -218,12 +213,12 @@ watch(tab, (newTab) => {
   }
 })
 
-// ── Mount ─────────────────────────────────────────────────────────
 onMounted(async () => {
   try {
     const res = await recipesApi.getById(route.params.id)
     recipe.value = res.data?.data ?? res.data
     if (recipe.value) {
+      servings.value    = recipe.value.servings ?? 1
       avgRating.value   = recipe.value.averageRating ?? 0
       ratingCount.value = recipe.value.ratingCount   ?? 0
       loadRating(recipe.value.id)
@@ -240,11 +235,11 @@ onMounted(async () => {
 <template>
   <!-- Skeleton -->
   <div v-if="loading" class="detail-wrap">
-    <div class="skel-img" />
-    <div class="skel-title" />
-    <div class="skel-sub" />
-    <div class="skel-stats">
-      <div v-for="i in 4" :key="i" class="skel-stat" />
+    <div class="skel skel-img" />
+    <div class="skel skel-title" />
+    <div class="skel skel-sub" />
+    <div class="skel-stats-row">
+      <div v-for="i in 4" :key="i" class="skel skel-stat" />
     </div>
   </div>
 
@@ -258,215 +253,298 @@ onMounted(async () => {
       {{ lang.t('common.back') }}
     </button>
 
-    <!-- Hero image -->
-    <div class="hero-img">
-      <img v-if="recipe.imageUrl" :src="resolveImageUrl(recipe.imageUrl)" :alt="lang.recipeTitle(recipe)" />
+    <!-- Hero -->
+    <div class="hero">
+      <img v-if="recipe.imageUrl" :src="resolveImageUrl(recipe.imageUrl)" :alt="lang.recipeTitle(recipe)" class="hero-img" />
       <div v-else class="hero-placeholder">🍽️</div>
 
-      <div class="hero-overlay">
-        <span v-if="recipe.categoryNameUz" class="badge-cat">{{ lang.catName(recipe) }}</span>
-        <span v-if="recipe.difficultyLevel"
-          class="badge-diff" :class="diffMap[recipe.difficultyLevel]?.cls">
+      <div class="hero-gradient" />
+
+      <!-- Bottom badges -->
+      <div class="hero-bottom">
+        <span v-if="recipe.categoryNameUz" class="hero-badge hero-badge--cat">{{ lang.catName(recipe) }}</span>
+        <span v-if="recipe.difficultyLevel" class="hero-badge" :class="diffMap[recipe.difficultyLevel]?.cls">
           {{ diffMap[recipe.difficultyLevel]?.label }}
         </span>
       </div>
 
-      <!-- Video play button -->
-      <button v-if="recipe.videoUrl" class="play-btn" @click="scrollToVideo" title="Videoni ko'rish">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="12" r="12" fill="rgba(0,0,0,0.55)"/>
-          <polygon points="10,8 17,12 10,16" fill="white"/>
-        </svg>
+      <!-- Video play -->
+      <button v-if="recipe.videoUrl" class="play-btn" @click="scrollToVideo">
+        <div class="play-circle">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9,7 19,12 9,17"/></svg>
+        </div>
       </button>
 
-      <!-- Favorite button -->
-      <button
-        class="fav-btn"
-        :class="{ 'fav-active': isFaved, 'fav-loading': favLoading, 'fav-locked': !auth.isAuthenticated }"
-        @click="toggleFav"
-        :title="!auth.isAuthenticated ? 'Sevimlilarga qo\'shish uchun tizimga kiring' : (isFaved ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish')"
-      >
-        <span v-if="!auth.isAuthenticated" class="fav-lock">🔒</span>
-        <svg v-else viewBox="0 0 24 24" :fill="isFaved ? 'currentColor' : 'none'" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Video -->
-    <!-- Gallery rasmlari -->
-    <div v-if="recipe.images?.length" class="gallery-wrap">
-      <div class="gallery-strip">
-        <div
-          v-for="(img, i) in recipe.images"
-          :key="img.id"
-          class="gallery-thumb"
-          @click="activeGalleryIdx = i"
-          :class="{ 'gallery-thumb-active': activeGalleryIdx === i }"
-        >
-          <img :src="resolveImageUrl(img.imageUrl)" :alt="`Rasm ${i+1}`" />
-        </div>
-      </div>
-      <div v-if="activeGalleryIdx !== null" class="gallery-fullview">
-        <button class="gal-nav gal-prev" @click="activeGalleryIdx = Math.max(0, activeGalleryIdx - 1)"
-                :disabled="activeGalleryIdx === 0">‹</button>
-        <img :src="resolveImageUrl(recipe.images[activeGalleryIdx].imageUrl)" class="gal-full-img" />
-        <button class="gal-nav gal-next" @click="activeGalleryIdx = Math.min(recipe.images.length-1, activeGalleryIdx + 1)"
-                :disabled="activeGalleryIdx === recipe.images.length - 1">›</button>
-      </div>
-    </div>
-
-    <div v-if="recipe.videoUrl" id="recipe-video" class="video-wrap">
-      <!-- Mahalliy yuklangan video -->
-      <video
-        v-if="isLocalVideo(recipe.videoUrl)"
-        class="video-iframe"
-        controls
-        preload="metadata"
-        :src="recipe.videoUrl"
-      />
-      <!-- YouTube embed (iframe ishlaydi) -->
-      <iframe
-        v-else-if="getEmbedUrl(recipe.videoUrl)"
-        :src="getEmbedUrl(recipe.videoUrl)"
-        class="video-iframe"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen
-      />
-    </div>
-
-    <!-- Title + meta -->
-    <div class="title-block">
-      <h1 class="recipe-title">{{ lang.recipeTitle(recipe) }}</h1>
-
-      <!-- Star rating -->
-      <div class="star-row">
-        <div class="stars" :class="{ 'stars-locked': !auth.isAuthenticated }">
-          <button
-            v-for="s in 5"
-            :key="s"
-            class="star-btn"
-            :class="{
-              'star-filled': s <= (hoverScore || myScore || (auth.isAuthenticated ? 0 : Math.round(avgRating))),
-              'star-hover':  auth.isAuthenticated && s <= hoverScore && s > myScore
-            }"
-            @mouseenter="auth.isAuthenticated && (hoverScore = s)"
-            @mouseleave="auth.isAuthenticated && (hoverScore = 0)"
-            @click="submitRating(s)"
-            :disabled="ratingLoading"
-            :title="auth.isAuthenticated ? '' : 'Reyting berish uchun tizimga kiring'"
-          >★</button>
-        </div>
-        <span class="star-meta">
-          <span v-if="avgRating > 0" class="star-avg">{{ avgRating.toFixed(1) }}</span>
-          <span v-if="ratingCount > 0" class="star-count">({{ ratingCount }})</span>
-          <span v-if="myScore > 0 && auth.isAuthenticated" class="star-mine">· Sizning bahoyingiz: {{ myScore }}⭐</span>
-          <span v-if="!auth.isAuthenticated" class="star-locked-hint">· 🔒 Reyting berish uchun kiring</span>
-        </span>
-      </div>
-
-      <p v-if="recipe.description" class="recipe-desc">{{ recipe.description }}</p>
-
-      <!-- Tags -->
-      <div v-if="recipe.tags?.length" class="tags">
-        <span v-for="tag in recipe.tags" :key="tag.id" class="tag">#{{ tag.nameUz }}</span>
-      </div>
-
-      <!-- Author -->
-      <div v-if="recipe.authorFullName" class="author">
-        <div class="author-avatar">{{ recipe.authorFullName.charAt(0).toUpperCase() }}</div>
-        <span>{{ recipe.authorFullName }}</span>
-      </div>
-
-      <!-- Edit / Delete (author or admin) -->
-      <div v-if="canEdit" class="action-bar">
-        <button @click="showFormModal = true" class="btn-action btn-edit-recipe">
+      <!-- Top-right actions -->
+      <div class="hero-top-right">
+        <!-- Edit (compact icon) -->
+        <button v-if="canEdit" @click="showFormModal = true" class="hero-action-btn" title="Tahrirlash">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
           </svg>
-          {{ lang.t('recipe.edit') }}
         </button>
-        <button @click="showDeleteModal = true" :disabled="deleting" class="btn-action btn-del-recipe">
+        <!-- Delete (compact icon) -->
+        <button v-if="canEdit" @click="showDeleteModal = true" :disabled="deleting" class="hero-action-btn hero-action-btn--del" title="O'chirish">
           <span v-if="deleting" class="act-spinner" />
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
-          {{ lang.t('recipe.delete') }}
+        </button>
+        <!-- Favorite -->
+        <button
+          class="hero-action-btn"
+          :class="{ 'hero-action-btn--fav': isFaved }"
+          @click="toggleFav"
+          :title="isFaved ? 'Sevimlilardan o\'chirish' : 'Sevimlilarga qo\'shish'"
+        >
+          <span v-if="!auth.isAuthenticated">🔒</span>
+          <svg v-else viewBox="0 0 24 24" :fill="isFaved ? 'currentColor' : 'none'" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+          </svg>
         </button>
       </div>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-item">
-        <span class="stat-icon">⏱</span>
-        <div class="stat-val">{{ (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0) }} {{ lang.t('common.min') }}</div>
-        <div class="stat-lbl">{{ lang.t('common.total_time') }}</div>
-      </div>
-      <div class="stat-item">
-        <span class="stat-icon">👥</span>
-        <div class="stat-val">{{ recipe.servings }} {{ lang.t('common.ppl') }}</div>
-        <div class="stat-lbl">{{ lang.t('common.servings') }}</div>
-      </div>
-      <div class="stat-item">
-        <span class="stat-icon">⭐</span>
-        <div class="stat-val" :class="{ 'stat-new': avgRating === 0 }">
-          {{ avgRating > 0 ? avgRating.toFixed(1) : lang.t('common.not_rated') }}
+    <!-- Gallery -->
+    <div v-if="recipe.images?.length" class="gallery-wrap">
+      <div class="gallery-strip">
+        <div
+          v-for="(img, i) in recipe.images" :key="img.id"
+          class="gallery-thumb" :class="{ 'gallery-thumb--active': activeGalleryIdx === i }"
+          @click="activeGalleryIdx = i"
+        >
+          <img :src="resolveImageUrl(img.imageUrl)" :alt="`Rasm ${i+1}`" />
         </div>
-        <div class="stat-lbl">{{ lang.t('common.rating') }}</div>
       </div>
-      <div class="stat-item">
-        <span class="stat-icon">👁</span>
-        <div class="stat-val">{{ (recipe.viewCount || 0).toLocaleString() }}</div>
-        <div class="stat-lbl">{{ lang.t('common.views') }}</div>
+      <div v-if="activeGalleryIdx !== null" class="gallery-fullview">
+        <button class="gal-nav" @click="activeGalleryIdx = Math.max(0, activeGalleryIdx - 1)" :disabled="activeGalleryIdx === 0">‹</button>
+        <img :src="resolveImageUrl(recipe.images[activeGalleryIdx].imageUrl)" class="gal-full-img" />
+        <button class="gal-nav" @click="activeGalleryIdx = Math.min(recipe.images.length-1, activeGalleryIdx + 1)" :disabled="activeGalleryIdx === recipe.images.length - 1">›</button>
+      </div>
+    </div>
+
+    <!-- Video -->
+    <div v-if="recipe.videoUrl" id="recipe-video" class="video-wrap">
+      <video v-if="isLocalVideo(recipe.videoUrl)" class="video-iframe" controls preload="metadata" :src="recipe.videoUrl" />
+      <iframe v-else-if="getEmbedUrl(recipe.videoUrl)" :src="getEmbedUrl(recipe.videoUrl)"
+        class="video-iframe" frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen />
+    </div>
+
+    <!-- Title block -->
+    <div class="title-block">
+      <h1 class="recipe-title">{{ lang.recipeTitle(recipe) }}</h1>
+
+      <!-- Stars -->
+      <div class="star-row">
+        <div class="stars" :class="{ 'stars--locked': !auth.isAuthenticated }">
+          <button
+            v-for="s in 5" :key="s"
+            class="star-btn"
+            :class="{
+              'star-btn--filled': s <= (hoverScore || myScore || (auth.isAuthenticated ? 0 : Math.round(avgRating))),
+              'star-btn--hover':  auth.isAuthenticated && s <= hoverScore && s > myScore,
+            }"
+            @mouseenter="auth.isAuthenticated && (hoverScore = s)"
+            @mouseleave="auth.isAuthenticated && (hoverScore = 0)"
+            @click="submitRating(s)"
+            :disabled="ratingLoading"
+          >★</button>
+        </div>
+        <span class="star-meta">
+          <span v-if="avgRating > 0" class="star-avg">{{ avgRating.toFixed(1) }}</span>
+          <span v-if="ratingCount > 0" class="star-cnt">({{ ratingCount }})</span>
+          <span v-if="myScore > 0 && auth.isAuthenticated" class="star-mine">· Sizniki: {{ myScore }}★</span>
+          <span v-if="!auth.isAuthenticated" class="star-hint">· 🔒 Kiring</span>
+        </span>
+      </div>
+
+      <p v-if="recipe.description" class="recipe-desc">{{ recipe.description }}</p>
+
+      <!-- Tags + Author row -->
+      <div class="meta-row">
+        <div v-if="recipe.tags?.length" class="tags">
+          <span v-for="tag in recipe.tags" :key="tag.id" class="tag">#{{ tag.nameUz }}</span>
+        </div>
+        <div v-if="recipe.authorFullName" class="author">
+          <div class="author-avatar">{{ recipe.authorFullName.charAt(0).toUpperCase() }}</div>
+          <span class="author-name">{{ recipe.authorFullName }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compact stats bar -->
+    <div class="stats-bar">
+      <div class="stat-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+        </svg>
+        <div>
+          <div class="sp-val">{{ (recipe.prepTimeMinutes || 0) + (recipe.cookTimeMinutes || 0) }} {{ lang.t('common.min') }}</div>
+          <div class="sp-lbl">{{ lang.t('common.total_time') }}</div>
+        </div>
+      </div>
+      <div class="stat-divider" />
+      <div class="stat-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        <div>
+          <div class="sp-val">{{ recipe.servings }} {{ lang.t('common.ppl') }}</div>
+          <div class="sp-lbl">{{ lang.t('common.servings') }}</div>
+        </div>
+      </div>
+      <div class="stat-divider" />
+      <div class="stat-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/>
+        </svg>
+        <div>
+          <div class="sp-val" :class="{ 'sp-val--muted': avgRating === 0 }">
+            {{ avgRating > 0 ? avgRating.toFixed(1) : '—' }}
+          </div>
+          <div class="sp-lbl">{{ lang.t('common.rating') }}</div>
+        </div>
+      </div>
+      <div class="stat-divider" />
+      <div class="stat-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        <div>
+          <div class="sp-val">{{ (recipe.viewCount || 0).toLocaleString() }}</div>
+          <div class="sp-lbl">{{ lang.t('common.views') }}</div>
+        </div>
       </div>
     </div>
 
     <!-- Tab bar -->
     <div class="tab-bar">
-      <button
-        v-for="t in [
-          { key: 'ingredients', icon: '🧅', label: lang.t('recipe.ingredients') },
-          { key: 'steps',       icon: '📋', label: lang.t('recipe.steps')       },
-          { key: 'nutrition',   icon: '📊', label: lang.t('recipe.nutrition')   },
-          { key: 'comments',    icon: '💬', label: 'Izohlar'                    },
-        ]"
-        :key="t.key"
-        @click="onTabClick(t.key)"
-        class="tab-btn"
-        :class="{
-          'tab-active': tab === t.key,
-          'tab-locked': !auth.isAuthenticated && LOCKED_TABS.includes(t.key)
-        }"
-      >
-        <span>{{ t.icon }}</span>
-        <span>{{ t.label }}</span>
-        <span v-if="!auth.isAuthenticated && LOCKED_TABS.includes(t.key)" class="tab-lock">🔒</span>
-        <span v-else-if="t.key === 'comments' && commentsTotal > 0" class="tab-badge">{{ commentsTotal }}</span>
+      <!-- Ingredientlar -->
+      <button @click="onTabClick('ingredients')" class="tab-btn" :class="{ 'tab-btn--active': tab === 'ingredients' }">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <span class="tab-label">{{ lang.t('recipe.ingredients') }}</span>
+      </button>
+
+      <!-- Bosqichlar -->
+      <button @click="onTabClick('steps')" class="tab-btn" :class="{ 'tab-btn--active': tab === 'steps', 'tab-btn--locked': !auth.isAuthenticated }">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+        </svg>
+        <span class="tab-label">{{ lang.t('recipe.steps') }}</span>
+        <svg v-if="!auth.isAuthenticated" class="tab-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-width="2"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+      </button>
+
+      <!-- Ozuqa -->
+      <button @click="onTabClick('nutrition')" class="tab-btn" :class="{ 'tab-btn--active': tab === 'nutrition', 'tab-btn--locked': !auth.isAuthenticated }">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        <span class="tab-label">{{ lang.t('recipe.nutrition') }}</span>
+        <svg v-if="!auth.isAuthenticated" class="tab-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-width="2"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+      </button>
+
+      <!-- Izohlar -->
+      <button @click="onTabClick('comments')" class="tab-btn" :class="{ 'tab-btn--active': tab === 'comments', 'tab-btn--locked': !auth.isAuthenticated }">
+        <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+        <span class="tab-label">Izohlar</span>
+        <span v-if="!auth.isAuthenticated">
+          <svg class="tab-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-width="2"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+        </span>
+        <span v-else-if="commentsTotal > 0" class="tab-badge">{{ commentsTotal }}</span>
       </button>
     </div>
 
-    <!-- ─── Ingredients ─── -->
+    <!-- ─── Ingredients tab ─── -->
     <div v-if="tab === 'ingredients'" class="tab-content">
+
+      <!-- Serving scaler -->
+      <div class="serving-scaler">
+        <div class="ss-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M23 21v-2a4 4 0 00-3-3.87"/>
+          </svg>
+          <span class="ss-label">Porsiya</span>
+        </div>
+        <div class="ss-controls">
+          <button class="ss-btn" @click="changeServings(-1)" :disabled="servings <= 1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </button>
+          <span class="ss-val">{{ servings }}</span>
+          <button class="ss-btn" @click="changeServings(1)" :disabled="servings >= 50">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-width="2.5" d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+        <button v-if="checkedIngs.size > 0" class="ss-reset" @click="resetChecked" title="Belgilarni tozalash">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          {{ checkedIngs.size }}/{{ recipe.ingredients?.length }}
+        </button>
+      </div>
+
+      <!-- Progress bar for checked -->
+      <div v-if="recipe.ingredients?.length" class="ing-progress-wrap">
+        <div class="ing-progress-bar">
+          <div class="ing-progress-fill" :style="{ width: (checkedIngs.size / recipe.ingredients.length * 100) + '%' }" />
+        </div>
+        <span v-if="allChecked" class="ing-all-done">✓ Hammasi tayyor!</span>
+      </div>
+
       <div v-if="recipe.ingredients?.length" class="ingredient-list">
-        <div v-for="ing in recipe.ingredients" :key="ing.id" class="ingredient-row">
-          <div class="ing-dot" />
-          <span class="ing-name">{{ lang.ingName(ing) }}</span>
-          <span class="ing-amount">{{ units.formatAmount(ing.amount, ing.unit) }}</span>
+        <div
+          v-for="ing in recipe.ingredients" :key="ing.id"
+          class="ingredient-row"
+          :class="{ 'ingredient-row--checked': checkedIngs.has(ing.id) }"
+          @click="toggleIngCheck(ing.id)"
+        >
+          <div class="ing-check" :class="{ 'ing-check--done': checkedIngs.has(ing.id) }">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <span class="ing-name" :class="{ 'ing-name--done': checkedIngs.has(ing.id) }">
+            {{ lang.ingName(ing) }}
+          </span>
+          <span class="ing-amount" :class="{ 'ing-amount--changed': servings !== recipe.servings }">
+            {{ units.formatAmount(scaleAmount(ing.amount), ing.unit) }}
+          </span>
         </div>
       </div>
+
       <div v-else class="tab-empty">
-        <div class="te-icon">🧅</div>
+        <span class="te-icon">🧅</span>
         <p>{{ lang.t('recipe.no_ingredients') }}</p>
       </div>
     </div>
 
-    <!-- ─── Locked panel (guest) ─── -->
-    <div v-if="!auth.isAuthenticated && LOCKED_TABS.includes(tab)" class="tab-content locked-panel">
+    <!-- ─── Locked panel ─── -->
+    <div v-if="!auth.isAuthenticated && LOCKED_TABS.includes(tab)" class="locked-panel">
       <div class="lp-icon">🔒</div>
       <h3 class="lp-title">{{ lang.t('recipe.login_title') }}</h3>
       <p class="lp-desc">{{ lang.t('recipe.login_desc') }}</p>
@@ -476,37 +554,41 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- ─── Steps ─── -->
+    <!-- ─── Steps tab ─── -->
     <div v-if="tab === 'steps' && auth.isAuthenticated" class="tab-content">
       <div v-if="recipe.steps?.length" class="steps-list">
-        <div v-for="step in recipe.steps" :key="step.id" class="step-item">
+        <div v-for="step in recipe.steps" :key="step.id" class="step-card">
           <div class="step-num">{{ step.stepNumber }}</div>
           <div class="step-body">
             <p class="step-text">{{ step.instruction }}</p>
-            <p v-if="step.durationMinutes" class="step-time">⏱ {{ step.durationMinutes }} {{ lang.t('common.min') }}</p>
+            <div v-if="step.durationMinutes" class="step-time">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+              </svg>
+              {{ step.durationMinutes }} {{ lang.t('common.min') }}
+            </div>
             <img v-if="step.imageUrl" :src="resolveImageUrl(step.imageUrl)" class="step-img" />
           </div>
         </div>
       </div>
       <div v-else class="tab-empty">
-        <div class="te-icon">📋</div>
+        <span class="te-icon">📋</span>
         <p>{{ lang.t('recipe.no_steps') }}</p>
       </div>
     </div>
 
-    <!-- ─── Nutrition ─── -->
+    <!-- ─── Nutrition tab ─── -->
     <div v-if="tab === 'nutrition' && auth.isAuthenticated" class="tab-content">
       <div v-if="recipe.nutritionalInfo" class="nutrition-grid">
         <div v-for="n in [
-            { icon: '🔥', label: lang.t('nutrition.calories'), val: recipe.nutritionalInfo.caloriesPerServing, unit: 'kcal' },
-            { icon: '💪', label: lang.t('nutrition.protein'),  val: recipe.nutritionalInfo.proteinGrams,       unit: 'g'    },
-            { icon: '🫐', label: lang.t('nutrition.fat'),      val: recipe.nutritionalInfo.fatGrams,           unit: 'g'    },
-            { icon: '🌾', label: lang.t('nutrition.carbs'),    val: recipe.nutritionalInfo.carbohydrateGrams,  unit: 'g'    },
-            { icon: '🥦', label: lang.t('nutrition.fiber'),    val: recipe.nutritionalInfo.fiberGrams,         unit: 'g'    },
-            { icon: '🍯', label: lang.t('nutrition.sugar'),    val: recipe.nutritionalInfo.sugarGrams,         unit: 'g'    },
-          ]"
-          :key="n.label"
-          class="nutrition-card"
+            { icon: '🔥', label: lang.t('nutrition.calories'), val: recipe.nutritionalInfo.caloriesPerServing,   unit: 'kcal', color: '#ef4444' },
+            { icon: '💪', label: lang.t('nutrition.protein'),  val: recipe.nutritionalInfo.proteinGrams,         unit: 'g',    color: '#3b82f6' },
+            { icon: '🫐', label: lang.t('nutrition.fat'),      val: recipe.nutritionalInfo.fatGrams,             unit: 'g',    color: '#f59e0b' },
+            { icon: '🌾', label: lang.t('nutrition.carbs'),    val: recipe.nutritionalInfo.carbohydrateGrams,    unit: 'g',    color: '#22c55e' },
+            { icon: '🥦', label: lang.t('nutrition.fiber'),    val: recipe.nutritionalInfo.fiberGrams,           unit: 'g',    color: '#10b981' },
+            { icon: '🍯', label: lang.t('nutrition.sugar'),    val: recipe.nutritionalInfo.sugarGrams,           unit: 'g',    color: '#f97316' },
+          ]" :key="n.label"
+          class="nutrition-card" :style="`--nc: ${n.color}`"
         >
           <div class="nc-icon">{{ n.icon }}</div>
           <div class="nc-val">{{ n.val ?? '—' }}<span class="nc-unit">{{ n.unit }}</span></div>
@@ -514,53 +596,44 @@ onMounted(async () => {
         </div>
       </div>
       <div v-else class="tab-empty">
-        <div class="te-icon">📊</div>
+        <span class="te-icon">📊</span>
         <p>{{ lang.t('recipe.no_nutrition') }}</p>
       </div>
     </div>
 
-    <!-- ─── Comments ─── -->
+    <!-- ─── Comments tab ─── -->
     <div v-if="tab === 'comments' && auth.isAuthenticated" class="tab-content comments-section">
-
-      <!-- Add comment -->
-      <div class="comment-form" :class="{ 'comment-form--locked': !auth.isAuthenticated }">
-        <div class="cf-avatar">{{ auth.isAuthenticated ? (auth.initials || '?') : '🔒' }}</div>
-        <div class="cf-input-wrap" @click.capture="!auth.isAuthenticated && requireAuth('Izoh qoldirish uchun tizimga kiring')">
+      <div class="comment-form">
+        <div class="cf-avatar">{{ auth.initials || '?' }}</div>
+        <div class="cf-right">
           <textarea
             v-model="newComment"
             class="cf-textarea"
-            :placeholder="auth.isAuthenticated ? 'Izohingizni yozing...' : 'Izoh qoldirish uchun tizimga kiring...'"
-            :disabled="!auth.isAuthenticated"
+            placeholder="Izohingizni yozing..."
             rows="2"
             maxlength="2000"
             @keydown.ctrl.enter="submitComment"
           />
           <div class="cf-actions">
-            <span v-if="auth.isAuthenticated" class="cf-hint">{{ lang.t('recipe.ctrl_enter') }}</span>
-            <button
-              class="cf-submit"
-              :disabled="auth.isAuthenticated ? (!newComment.trim() || submitting) : false"
-              @click="submitComment"
-            >
+            <span class="cf-hint">Ctrl+Enter — yuborish</span>
+            <button class="cf-submit" :disabled="!newComment.trim() || submitting" @click="submitComment">
               <span v-if="submitting" class="act-spinner" />
-              <span v-else>{{ auth.isAuthenticated ? lang.t('auth.reset_send') : `🔒 ${lang.t('auth.login_btn')}` }}</span>
+              <span v-else>{{ lang.t('auth.reset_send') }}</span>
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Comments list -->
-      <div v-if="commentsLoad && comments.length === 0" class="comments-loading">
-        <div v-for="i in 3" :key="i" class="skel-comment" />
+      <div v-if="commentsLoad && comments.length === 0" class="comments-skel">
+        <div v-for="i in 3" :key="i" class="skel skel-comment" />
       </div>
 
       <template v-else>
-        <div v-if="comments.length === 0 && !commentsLoad" class="tab-empty">
-          <div class="te-icon">💬</div>
+        <div v-if="comments.length === 0" class="tab-empty">
+          <span class="te-icon">💬</span>
           <p>{{ lang.t('recipe.no_comments') }}</p>
         </div>
-
-        <div v-for="c in comments" :key="c.id" class="comment-item">
+        <div v-for="c in comments" :key="c.id" class="comment-card">
           <div class="ci-avatar">{{ c.userName?.charAt(0)?.toUpperCase() || '?' }}</div>
           <div class="ci-body">
             <div class="ci-header">
@@ -569,26 +642,13 @@ onMounted(async () => {
             </div>
             <p class="ci-text">{{ c.content }}</p>
           </div>
-          <button
-            v-if="c.mine || auth.isAdmin"
-            class="ci-del"
-            @click="deleteComment(c.id)"
-            title="O'chirish"
-          >
+          <button v-if="c.mine || auth.isAdmin" class="ci-del" @click="deleteComment(c.id)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
           </button>
         </div>
-
-        <!-- Load more -->
-        <button
-          v-if="!commentsLast && comments.length > 0"
-          class="load-more-btn"
-          :disabled="commentsLoad"
-          @click="loadComments(false)"
-        >
+        <button v-if="!commentsLast && comments.length > 0" class="load-more" :disabled="commentsLoad" @click="loadComments(false)">
           <span v-if="commentsLoad" class="act-spinner" />
           <span v-else>{{ lang.t('recipe.show_more') }}</span>
         </button>
@@ -597,25 +657,8 @@ onMounted(async () => {
 
   </div>
 
-  <!-- Recipe Form Modal -->
-  <RecipeFormModal
-    v-if="recipe"
-    :recipe="recipe"
-    :visible="showFormModal"
-    @close="showFormModal = false"
-    @saved="handleSaved"
-  />
-
-  <!-- Delete Confirm Modal -->
-  <ConfirmModal
-    :show="showDeleteModal"
-    :message="lang.t('common.confirm_delete')"
-    confirm-label="Ha, o'chirish"
-    :danger="true"
-    @confirm="confirmDeleteRecipe"
-    @cancel="showDeleteModal = false"
-  />
-
+  <RecipeFormModal v-if="recipe" :recipe="recipe" :visible="showFormModal" @close="showFormModal = false" @saved="handleSaved" />
+  <ConfirmModal :show="showDeleteModal" :message="lang.t('common.confirm_delete')" confirm-label="Ha, o'chirish" :danger="true" @confirm="confirmDeleteRecipe" @cancel="showDeleteModal = false" />
 </template>
 
 <style scoped>
@@ -624,684 +667,513 @@ onMounted(async () => {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
+  padding-bottom: 40px;
 }
 
 /* ── Back ── */
 .back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  border: none;
-  color: var(--tx-4);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none;
+  color: var(--tx-5); font-size: 13px; font-weight: 600;
+  cursor: pointer; padding: 0; width: fit-content;
   transition: color 0.2s;
 }
 .back-btn:hover { color: #E8713E; }
-.back-btn svg { width: 18px; height: 18px; }
+.back-btn svg { width: 16px; height: 16px; }
 
-/* ── Hero image ── */
-.hero-img {
+/* ── Hero ── */
+.hero {
   position: relative;
-  aspect-ratio: 16/9;
-  border-radius: 20px;
+  aspect-ratio: 4/3;
+  border-radius: 24px;
   overflow: hidden;
   background: var(--bg-card-md);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
 }
-.hero-img img { width: 100%; height: 100%; object-fit: cover; }
+@media (min-width: 500px) { .hero { aspect-ratio: 16/9; } }
+
+.hero-img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform 0.4s ease;
+}
+.hero:hover .hero-img { transform: scale(1.02); }
+
 .hero-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 80px;
-  opacity: 0.15;
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 80px; opacity: 0.12;
 }
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: 12px;
-  background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%);
+
+.hero-gradient {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.1) 40%, transparent 70%);
 }
-.badge-cat {
-  padding: 5px 12px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
+
+.hero-bottom {
+  position: absolute; bottom: 14px; left: 14px;
+  display: flex; gap: 8px; align-items: center;
+}
+.hero-badge {
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 800;
+  backdrop-filter: blur(8px);
+}
+.hero-badge--cat { background: rgba(0,0,0,0.45); color: rgba(255,255,255,0.92); }
+.diff-easy   { background: rgba(216,90,48,0.85);  color: #fff; }
+.diff-medium { background: rgba(234,179,8,0.85);  color: #fff; }
+.diff-hard   { background: rgba(239,68,68,0.85);  color: #fff; }
+
+/* Top-right floating actions */
+.hero-top-right {
+  position: absolute; top: 12px; right: 12px;
+  display: flex; gap: 7px;
+}
+.hero-action-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: none;
   background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px);
   color: rgba(255,255,255,0.9);
-  backdrop-filter: blur(6px);
-}
-.badge-diff {
-  padding: 5px 12px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 800;
-}
-.diff-easy   { background: rgba(216,90,48,0.9);  color: #fff; }
-.diff-medium { background: rgba(234,179,8,0.9);  color: #fff; }
-.diff-hard   { background: rgba(239,68,68,0.9);  color: #fff; }
-
-/* Favourite btn on hero */
-.fav-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 15px;
   transition: all 0.2s;
-  flex-shrink: 0;
 }
-.fav-btn svg { width: 22px; height: 22px; }
-.fav-btn:hover { background: rgba(216,90,48,0.7); transform: scale(1.1); }
-.fav-active { color: #ef4444 !important; background: rgba(239,68,68,0.2) !important; }
-.fav-locked { opacity: 0.6; cursor: not-allowed; }
-.fav-lock   { font-size: 16px; line-height: 1; }
-.fav-loading { opacity: 0.6; pointer-events: none; }
+.hero-action-btn svg { width: 17px; height: 17px; }
+.hero-action-btn:hover { background: rgba(0,0,0,0.7); transform: scale(1.08); }
+.hero-action-btn--fav { color: #ef4444; }
+.hero-action-btn--del:hover { background: rgba(239,68,68,0.7); }
 
-/* ── Video embed ── */
+/* Play btn */
+.play-btn {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: none; border: none; cursor: pointer; z-index: 3;
+}
+.play-circle {
+  width: 60px; height: 60px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255,255,255,0.5);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.play-btn:hover .play-circle { background: rgba(255,255,255,0.35); transform: scale(1.1); }
+.play-circle svg { width: 22px; height: 22px; color: #fff; margin-left: 3px; }
+
+/* ── Gallery ── */
+.gallery-wrap { }
+.gallery-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.gallery-thumb {
+  flex-shrink: 0; width: 80px; height: 60px; border-radius: 10px;
+  overflow: hidden; cursor: pointer; border: 2px solid transparent;
+  transition: all 0.15s;
+}
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.gallery-thumb:hover { transform: translateY(-2px); border-color: rgba(216,90,48,0.4); }
+.gallery-thumb--active { border-color: #E8713E !important; }
+.gallery-fullview { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gal-full-img { flex: 1; max-height: 380px; object-fit: contain; border-radius: 14px; background: var(--bg-card); }
+.gal-nav {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 50%;
+  background: var(--bg-card); border: 1px solid var(--bd); color: var(--tx-2);
+  font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.gal-nav:hover:not(:disabled) { background: rgba(216,90,48,0.1); color: #E8713E; }
+.gal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Video ── */
 .video-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16/9;
-  border-radius: 20px;
-  overflow: hidden;
-  background: #000;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  position: relative; width: 100%; aspect-ratio: 16/9;
+  border-radius: 20px; overflow: hidden; background: #000;
 }
-.video-iframe,
-.video-wrap video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-}
+.video-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
 
 /* ── Title block ── */
 .title-block { display: flex; flex-direction: column; gap: 10px; }
 
 .recipe-title {
-  font-size: 26px;
-  font-weight: 900;
-  color: var(--tx-1);
-  line-height: 1.2;
-  letter-spacing: -0.3px;
-}
-.recipe-desc {
-  font-size: 14px;
-  color: var(--tx-4);
-  line-height: 1.7;
+  font-size: 26px; font-weight: 900; color: var(--tx-1);
+  line-height: 1.2; letter-spacing: -0.4px;
 }
 
-/* ── Star rating ── */
-.star-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.star-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stars     { display: flex; gap: 1px; }
+.star-btn  {
+  background: none; border: none; font-size: 22px; line-height: 1;
+  cursor: pointer; color: var(--tx-6); padding: 0 1px;
+  transition: color 0.12s, transform 0.1s;
 }
-.stars { display: flex; gap: 2px; }
-.star-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--tx-6);
-  transition: color 0.15s, transform 0.1s;
-  padding: 0 1px;
-}
+.star-btn:not(:disabled):hover { transform: scale(1.25); }
 .star-btn:disabled { cursor: default; }
-.star-btn:not(:disabled):hover { transform: scale(1.2); }
-.star-filled { color: #f59e0b; }
-.star-hover  { color: #fbbf24; }
-.star-meta   { display: flex; align-items: center; gap: 5px; font-size: 13px; }
-.star-avg    { font-weight: 800; color: var(--tx-2); }
-.star-count  { color: var(--tx-5); }
-.star-mine        { color: #E8713E; font-weight: 600; }
-.stars-locked .star-btn { cursor: not-allowed; opacity: 0.5; }
-.star-locked-hint { color: var(--tx-5); font-size: 13px; }
+.star-btn--filled { color: #f59e0b; }
+.star-btn--hover  { color: #fcd34d; }
+.stars--locked .star-btn { cursor: not-allowed; opacity: 0.5; }
+.star-meta { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+.star-avg  { font-weight: 900; color: var(--tx-2); }
+.star-cnt  { color: var(--tx-5); }
+.star-mine { color: #E8713E; font-weight: 700; }
+.star-hint { color: var(--tx-5); }
 
+.recipe-desc {
+  font-size: 14px; color: var(--tx-4); line-height: 1.75;
+}
+
+.meta-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: rgba(216,90,48,0.12);
-  border: 1px solid rgba(216,90,48,0.2);
-  color: #E8713E;
-  font-size: 12px;
-  font-weight: 700;
+  padding: 4px 10px; border-radius: 20px;
+  background: rgba(216,90,48,0.1); border: 1px solid rgba(216,90,48,0.2);
+  color: #E8713E; font-size: 12px; font-weight: 700;
 }
 
-.author {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--tx-4);
-  font-weight: 600;
-}
+.author { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .author-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 28px; height: 28px; border-radius: 8px;
   background: linear-gradient(135deg, #D85A30, #E8713E);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
 }
+.author-name { font-size: 13px; font-weight: 600; color: var(--tx-4); }
 
-/* ── Stats ── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-.stat-item {
+/* ── Stats bar ── */
+.stats-bar {
+  display: flex; align-items: center;
   background: var(--bg-card);
   border: 1px solid var(--bd);
-  border-radius: 16px;
-  padding: 16px 12px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  transition: border-color 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border-radius: 18px;
+  padding: 14px 20px;
+  gap: 0;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  overflow-x: auto;
 }
-.stat-item:hover { border-color: rgba(216,90,48,0.25); }
-.stat-icon { font-size: 22px; }
-.stat-val  { font-size: 14px; font-weight: 800; color: var(--tx-2); }
-.stat-new  { font-size: 11px; color: var(--tx-5); font-weight: 600; }
-.stat-lbl  { font-size: 10px; font-weight: 600; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.05em; }
-
-@media (max-width: 480px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
+.stat-pill {
+  display: flex; align-items: center; gap: 10px;
+  flex: 1; min-width: 80px;
+  padding: 0 8px;
 }
+.stat-pill svg { width: 18px; height: 18px; color: #E8713E; flex-shrink: 0; stroke-width: 1.8; }
+.sp-val { font-size: 14px; font-weight: 800; color: var(--tx-1); line-height: 1.1; }
+.sp-val--muted { color: var(--tx-5); font-size: 12px; }
+.sp-lbl { font-size: 10px; font-weight: 600; color: var(--tx-6); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.stat-divider { width: 1px; height: 36px; background: var(--bd); flex-shrink: 0; }
 
 /* ── Tab bar ── */
 .tab-bar {
-  display: flex;
-  gap: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 16px;
-  padding: 4px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex; gap: 4px;
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 16px; padding: 4px;
 }
 .tab-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
   padding: 10px 6px;
-  border: none;
-  border-radius: 12px;
-  background: none;
-  color: var(--tx-5);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
+  border: 1px solid transparent; border-radius: 12px;
+  background: none; color: var(--tx-5);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; position: relative; white-space: nowrap;
 }
-.tab-btn:hover { color: var(--tx-3); }
-.tab-active {
-  background: rgba(216,90,48,0.15);
-  border: 1px solid rgba(216,90,48,0.25);
-  color: #E8713E;
+.tab-btn:hover:not(.tab-btn--locked) { color: var(--tx-3); }
+.tab-btn--active {
+  background: rgba(216,90,48,0.12); border-color: rgba(216,90,48,0.22); color: #E8713E;
 }
-.tab-locked { opacity: 0.6; }
-.tab-lock   { font-size: 11px; }
-
-.locked-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 56px 24px;
-  gap: 16px;
-}
-.lp-icon  { font-size: 48px; line-height: 1; }
-.lp-title { font-size: 20px; font-weight: 800; color: var(--tx-1); margin: 0; }
-.lp-desc  { font-size: 14px; color: var(--tx-4); max-width: 380px; line-height: 1.6; margin: 0; }
-.lp-btns  { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
-.lp-btn-primary {
-  padding: 10px 24px;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  border-radius: 12px;
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-.lp-btn-primary:hover { opacity: 0.88; }
-.lp-btn-ghost {
-  padding: 10px 24px;
-  border: 1.5px solid var(--bd-xl);
-  border-radius: 12px;
-  color: var(--tx-3);
-  font-size: 14px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: border-color 0.2s, color 0.2s;
-}
-.lp-btn-ghost:hover { border-color: rgba(216,90,48,0.4); color: #E8713E; }
-
+.tab-btn--locked { opacity: 0.55; }
+.tab-icon  { width: 15px; height: 15px; flex-shrink: 0; }
+.tab-label { font-size: 12px; }
+.tab-lock-icon { width: 11px; height: 11px; opacity: 0.6; flex-shrink: 0; }
 .tab-badge {
-  background: #E8713E;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 800;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
+  background: #E8713E; color: #fff; font-size: 9px; font-weight: 900;
+  min-width: 16px; height: 16px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 3px;
 }
 
 /* ── Tab content ── */
 .tab-content { display: flex; flex-direction: column; gap: 8px; }
 
-/* Ingredients */
-.ingredient-list { display: flex; flex-direction: column; gap: 6px; }
-.ingredient-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* Serving scaler */
+.serving-scaler {
+  display: flex; align-items: center; justify-content: space-between;
   padding: 12px 16px;
   background: var(--bg-card);
   border: 1px solid var(--bd);
-  border-radius: 12px;
-  transition: border-color 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border-radius: 14px;
 }
-.ingredient-row:hover { border-color: rgba(216,90,48,0.2); }
-.ing-dot  { width: 8px; height: 8px; border-radius: 50%; background: #E8713E; flex-shrink: 0; }
-.ing-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--tx-2); }
-.ing-amount { font-size: 13px; font-weight: 700; color: var(--tx-4); }
+.ss-left { display: flex; align-items: center; gap: 8px; }
+.ss-left svg { width: 16px; height: 16px; color: var(--tx-5); }
+.ss-label { font-size: 13px; font-weight: 700; color: var(--tx-3); }
+.ss-controls { display: flex; align-items: center; gap: 10px; }
+.ss-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid var(--bd-lg);
+  background: var(--bg-input); color: var(--tx-3);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.ss-btn svg { width: 14px; height: 14px; }
+.ss-btn:hover:not(:disabled) { border-color: #E8713E; color: #E8713E; background: rgba(216,90,48,0.08); }
+.ss-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.ss-val {
+  font-size: 18px; font-weight: 900; color: var(--tx-1);
+  min-width: 28px; text-align: center;
+}
+.ss-reset {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid rgba(34,197,94,0.3);
+  background: rgba(34,197,94,0.08); color: #22c55e;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  transition: all 0.15s;
+}
+.ss-reset svg { width: 12px; height: 12px; }
+.ss-reset:hover { background: rgba(34,197,94,0.15); }
+
+/* Ingredient progress */
+.ing-progress-wrap {
+  display: flex; align-items: center; gap: 10px;
+}
+.ing-progress-bar {
+  flex: 1; height: 3px; background: var(--bd); border-radius: 3px; overflow: hidden;
+}
+.ing-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #16a34a, #22c55e);
+  border-radius: 3px; transition: width 0.4s ease;
+}
+.ing-all-done {
+  font-size: 11px; font-weight: 800; color: #22c55e; white-space: nowrap; flex-shrink: 0;
+}
+
+/* Ingredient rows */
+.ingredient-list { display: flex; flex-direction: column; gap: 5px; }
+.ingredient-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px;
+  background: var(--bg-card); border: 1.5px solid var(--bd);
+  border-radius: 12px; cursor: pointer;
+  transition: all 0.18s;
+}
+.ingredient-row:hover { border-color: rgba(216,90,48,0.3); background: var(--bg-card-md); }
+.ingredient-row--checked { border-color: rgba(34,197,94,0.25); background: rgba(34,197,94,0.03); opacity: 0.7; }
+
+.ing-check {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--bd-xl);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.ing-check svg { width: 11px; height: 11px; color: transparent; transition: color 0.15s; }
+.ingredient-row:hover .ing-check { border-color: rgba(216,90,48,0.5); }
+.ing-check--done { background: #22c55e; border-color: #22c55e; }
+.ing-check--done svg { color: #fff; }
+
+.ing-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--tx-2); transition: all 0.2s; }
+.ing-name--done { text-decoration: line-through; color: var(--tx-6); }
+.ing-amount { font-size: 13px; font-weight: 700; color: var(--tx-5); transition: color 0.2s; }
+.ing-amount--changed { color: #E8713E; }
 
 /* Steps */
-.steps-list { display: flex; flex-direction: column; gap: 12px; }
-.step-item {
-  display: flex;
-  gap: 16px;
-  padding: 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 16px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+.steps-list { display: flex; flex-direction: column; gap: 10px; }
+.step-card {
+  display: flex; gap: 16px; padding: 18px 16px;
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 16px; transition: border-color 0.2s;
 }
+.step-card:hover { border-color: rgba(216,90,48,0.2); }
 .step-num {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #D85A30, #E8713E);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, #D85A30, #E8713E); color: #fff;
+  font-size: 14px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 10px rgba(216,90,48,0.3);
 }
 .step-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.step-text { font-size: 14px; color: var(--tx-3); line-height: 1.7; }
-.step-time { font-size: 12px; color: #E8713E; font-weight: 700; }
+.step-text { font-size: 14px; color: var(--tx-3); line-height: 1.75; }
+.step-time { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #E8713E; font-weight: 700; }
+.step-time svg { width: 13px; height: 13px; }
 .step-img  { border-radius: 12px; max-height: 160px; width: 100%; object-fit: cover; }
 
 /* Nutrition */
-.nutrition-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
+.nutrition-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .nutrition-card {
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 16px;
-  padding: 16px 12px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  transition: border-color 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 16px; padding: 18px 12px;
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 5px;
+  transition: border-color 0.2s, transform 0.2s;
 }
-.nutrition-card:hover { border-color: rgba(216,90,48,0.2); }
-.nc-icon  { font-size: 28px; }
-.nc-val   { font-size: 18px; font-weight: 900; color: #E8713E; }
-.nc-unit  { font-size: 11px; color: var(--tx-5); margin-left: 2px; }
-.nc-label { font-size: 11px; font-weight: 700; color: var(--tx-4); text-transform: uppercase; letter-spacing: 0.06em; }
-
+.nutrition-card:hover { border-color: var(--nc); transform: translateY(-2px); }
+.nc-icon  { font-size: 26px; }
+.nc-val   { font-size: 20px; font-weight: 900; color: var(--nc); }
+.nc-unit  { font-size: 11px; color: var(--tx-5); margin-left: 2px; font-weight: 600; }
+.nc-label { font-size: 10px; font-weight: 700; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.06em; }
 @media (max-width: 480px) { .nutrition-grid { grid-template-columns: repeat(2, 1fr); } }
 
-/* ── Action bar ── */
-.action-bar { display: flex; gap: 8px; padding-top: 4px; }
-.btn-action {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
+/* Locked panel */
+.locked-panel {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 60px 24px; gap: 14px; text-align: center;
+  background: var(--bg-card); border: 1px solid var(--bd); border-radius: 24px;
 }
-.btn-action svg { width: 16px; height: 16px; flex-shrink: 0; }
-.btn-edit-recipe {
-  flex: 1;
-  background: rgba(216,90,48,0.12);
-  border: 1px solid rgba(216,90,48,0.25);
-  color: #E8713E;
+.lp-icon  { font-size: 46px; line-height: 1; }
+.lp-title { font-size: 18px; font-weight: 900; color: var(--tx-1); margin: 0; }
+.lp-desc  { font-size: 14px; color: var(--tx-4); max-width: 360px; line-height: 1.6; margin: 0; }
+.lp-btns  { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.lp-btn-primary {
+  padding: 10px 22px; border-radius: 12px;
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; transition: opacity 0.2s;
 }
-.btn-edit-recipe:hover { background: rgba(216,90,48,0.2); transform: translateY(-1px); }
-.btn-del-recipe {
-  background: rgba(239,68,68,0.08);
-  border: 1px solid rgba(239,68,68,0.18);
-  color: #f87171;
+.lp-btn-primary:hover { opacity: 0.88; }
+.lp-btn-ghost {
+  padding: 10px 22px; border-radius: 12px;
+  border: 1.5px solid var(--bd-xl); color: var(--tx-3);
+  font-size: 14px; font-weight: 700; text-decoration: none; transition: all 0.2s;
 }
-.btn-del-recipe:hover:not(:disabled) { background: rgba(239,68,68,0.16); transform: translateY(-1px); }
-.btn-del-recipe:disabled { opacity: 0.5; cursor: not-allowed; }
+.lp-btn-ghost:hover { border-color: rgba(216,90,48,0.4); color: #E8713E; }
 
-.act-spinner {
-  width: 14px; height: 14px;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  display: inline-block;
-  flex-shrink: 0;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Comments ── */
+/* Comments */
 .comments-section { gap: 12px; }
-
 .comment-form {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 16px;
-  padding: 14px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 16px; padding: 14px;
 }
 .cf-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 36px; height: 36px; border-radius: 10px;
   background: linear-gradient(135deg, #D85A30, #E8713E);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  color: #fff; font-size: 14px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.cf-input-wrap { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.cf-right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .cf-textarea {
-  width: 100%;
-  background: var(--bg-input);
-  border: 1px solid var(--bd-md);
-  border-radius: 10px;
-  color: var(--tx-2);
-  font-size: 14px;
-  padding: 10px 12px;
-  resize: vertical;
-  min-height: 60px;
-  outline: none;
-  font-family: inherit;
-  transition: border-color 0.2s;
+  width: 100%; background: var(--bg-input); border: 1.5px solid var(--bd-md);
+  border-radius: 10px; color: var(--tx-2); font-size: 14px;
+  padding: 10px 12px; resize: vertical; min-height: 60px; outline: none;
+  font-family: inherit; transition: border-color 0.2s;
 }
-.cf-textarea:focus { border-color: rgba(216,90,48,0.4); }
+.cf-textarea:focus { border-color: rgba(216,90,48,0.5); }
 .cf-textarea::placeholder { color: var(--tx-5); }
-.cf-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.cf-hint { font-size: 11px; color: var(--tx-6); }
+.cf-actions { display: flex; align-items: center; justify-content: space-between; }
+.cf-hint   { font-size: 11px; color: var(--tx-6); }
 .cf-submit {
-  padding: 8px 18px;
-  border-radius: 10px;
-  border: none;
+  padding: 8px 18px; border-radius: 10px; border: none;
   background: linear-gradient(135deg, #D85A30, #E8713E);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; transition: opacity 0.2s;
 }
 .cf-submit:disabled { opacity: 0.4; cursor: not-allowed; }
-.cf-submit:not(:disabled):hover { opacity: 0.85; transform: translateY(-1px); }
+.cf-submit:not(:disabled):hover { opacity: 0.88; }
 
-.comment-form--locked .cf-textarea {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-.comment-form--locked .cf-avatar {
-  opacity: 0.6;
-  filter: grayscale(1);
-}
+.comments-skel { display: flex; flex-direction: column; gap: 8px; }
 
-.comment-login-hint {
-  text-align: center;
-  font-size: 14px;
-  color: var(--tx-5);
-  padding: 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+.comment-card {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 14px; transition: border-color 0.15s;
 }
-.cl-link { color: #E8713E; font-weight: 700; text-decoration: none; }
-.cl-link:hover { text-decoration: underline; }
-
-.comment-item {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 14px;
-  transition: border-color 0.2s;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-.comment-item:hover { border-color: var(--bd-md); }
+.comment-card:hover { border-color: var(--bd-lg); }
 .ci-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--bg-input-f);
-  color: var(--tx-3);
-  font-size: 13px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 9px;
+  background: var(--bg-input); color: var(--tx-3);
+  font-size: 13px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.ci-body { flex: 1; min-width: 0; }
-.ci-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.ci-name  { font-size: 13px; font-weight: 700; color: var(--tx-2); }
-.ci-time  { font-size: 11px; color: var(--tx-6); }
-.ci-text  { font-size: 14px; color: var(--tx-3); line-height: 1.6; word-break: break-word; }
+.ci-body   { flex: 1; min-width: 0; }
+.ci-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ci-name   { font-size: 13px; font-weight: 700; color: var(--tx-2); }
+.ci-time   { font-size: 11px; color: var(--tx-6); }
+.ci-text   { font-size: 14px; color: var(--tx-3); line-height: 1.6; word-break: break-word; }
 .ci-del {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: var(--tx-6);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s, background 0.2s;
+  flex-shrink: 0; background: none; border: none; color: var(--tx-6);
+  cursor: pointer; padding: 4px; border-radius: 6px;
+  display: flex; align-items: center; transition: all 0.15s;
 }
 .ci-del:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
 .ci-del svg { width: 14px; height: 14px; }
 
-.comments-loading { display: flex; flex-direction: column; gap: 8px; }
-.skel-comment {
-  height: 68px;
-  border-radius: 14px;
-  background: var(--bg-card-md);
-  animation: pulse 1.5s ease-in-out infinite;
+.load-more {
+  align-self: center; padding: 9px 22px; border-radius: 12px;
+  border: 1px solid var(--bd-md); background: var(--bg-card);
+  color: var(--tx-4); font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; transition: all 0.2s;
 }
+.load-more:hover:not(:disabled) { border-color: rgba(216,90,48,0.3); color: #E8713E; }
+.load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.load-more-btn {
-  align-self: center;
-  padding: 10px 24px;
-  border-radius: 12px;
-  border: 1px solid var(--bd-md);
-  background: var(--bg-card);
-  color: var(--tx-4);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.load-more-btn:hover:not(:disabled) { border-color: rgba(216,90,48,0.3); color: #E8713E; }
-.load-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* Empty states */
+/* Empty */
 .tab-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60px 24px;
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 20px;
-  gap: 10px;
-  color: var(--tx-5);
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 50px 24px; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--bd);
+  border-radius: 18px; color: var(--tx-5); font-size: 14px; font-weight: 600;
 }
-.te-icon { font-size: 44px; }
+.te-icon { font-size: 40px; }
+
+/* Spinner */
+.act-spinner {
+  width: 13px; height: 13px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: currentColor;
+  border-radius: 50%; animation: spin 0.65s linear infinite;
+  display: inline-block; flex-shrink: 0;
+}
 
 /* Skeleton */
-.skel-img   { width: 100%; aspect-ratio: 16/9; border-radius: 20px; background: var(--bd); animation: pulse 1.5s ease-in-out infinite; }
-.skel-title { height: 34px; width: 70%; border-radius: 10px; background: var(--bg-input); animation: pulse 1.5s ease-in-out infinite; }
-.skel-sub   { height: 18px; width: 50%; border-radius: 8px; background: var(--bg-card-md); animation: pulse 1.5s ease-in-out infinite; }
-.skel-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.skel-stat  { height: 80px; border-radius: 16px; background: var(--bg-card-md); animation: pulse 1.5s ease-in-out infinite; }
+.skel { animation: shimmer 1.5s ease-in-out infinite; background: var(--bg-card-md); }
+.skel-img   { width: 100%; aspect-ratio: 16/9; border-radius: 24px; }
+.skel-title { height: 32px; width: 65%; border-radius: 10px; margin-top: 4px; }
+.skel-sub   { height: 16px; width: 45%; border-radius: 8px; }
+.skel-stats-row { display: flex; gap: 10px; }
+.skel-stat  { flex: 1; height: 58px; border-radius: 16px; }
+.skel-comment { height: 64px; border-radius: 14px; }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1; }
+@keyframes shimmer { 0%,100% { opacity: 0.45; } 50% { opacity: 0.9; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .detail-wrap { gap: 14px; }
+
+  .recipe-title { font-size: 20px; }
+
+  /* Stats bar — scroll */
+  .stats-bar {
+    padding: 10px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    gap: 0;
+    flex-wrap: nowrap;
+  }
+  .stats-bar::-webkit-scrollbar { display: none; }
+  .stat-pill { min-width: 72px; padding: 0 6px; gap: 6px; }
+  .stat-pill svg { width: 14px; height: 14px; }
+  .sp-val { font-size: 13px; }
+  .sp-lbl { font-size: 9px; }
+  .stat-divider { height: 28px; }
+
+  /* Tab bar — smaller text, icon only if tight */
+  .tab-bar { gap: 2px; padding: 3px; }
+  .tab-btn { padding: 8px 4px; gap: 3px; }
+  .tab-label { font-size: 10px; }
+  .tab-icon  { width: 14px; height: 14px; }
+
+  /* Serving scaler */
+  .ss-label { font-size: 12px; }
+  .ss-val   { font-size: 16px; }
+
+  /* Comments */
+  .cf-hint { display: none; }
+
+  /* Nutrition */
+  .nutrition-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .nc-val { font-size: 16px; }
+
+  /* Step card */
+  .step-card { padding: 14px 12px; gap: 10px; }
+  .step-num  { width: 30px; height: 30px; font-size: 12px; }
 }
 
-/* ── External video card (Instagram / TikTok) ── */
-.ext-video-card {
-  display: flex; align-items: center; gap: 16px;
-  padding: 20px 24px;
-  background: var(--bg-card); border: 1px solid var(--bd); border-radius: 16px;
+@media (max-width: 380px) {
+  .tab-label { display: none; }
+  .tab-btn   { padding: 10px 6px; }
+  .tab-icon  { width: 18px; height: 18px; }
+  .tab-badge { position: absolute; top: 4px; right: 4px; }
 }
-.ext-video-icon { font-size: 36px; flex-shrink: 0; }
-.ext-video-info { flex: 1; }
-.ext-video-name { font-size: 15px; font-weight: 800; color: var(--tx-1); }
-.ext-video-sub  { font-size: 12px; color: var(--tx-5); margin-top: 3px; }
-.ext-video-btn {
-  padding: 10px 20px; border-radius: 12px;
-  background: #E8713E; color: white;
-  font-size: 13px; font-weight: 800;
-  text-decoration: none; white-space: nowrap;
-  transition: background 0.15s;
-}
-.ext-video-btn:hover { background: #d4622f; }
-
-/* ── Play button ── */
-.play-btn {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 64px; height: 64px;
-  border: none; background: transparent;
-  cursor: pointer; z-index: 3;
-  opacity: 0.85; transition: opacity 0.2s, transform 0.2s;
-}
-.play-btn:hover { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-.play-btn svg { width: 64px; height: 64px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
-
-/* ── Gallery ── */
-.gallery-wrap { margin-bottom: 24px; }
-
-.gallery-strip {
-  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
-  scrollbar-width: thin;
-}
-.gallery-thumb {
-  flex-shrink: 0; width: 88px; height: 66px; border-radius: 10px;
-  overflow: hidden; cursor: pointer; border: 2px solid transparent;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.gallery-thumb:hover { transform: translateY(-2px); border-color: rgba(216,90,48,0.4); }
-.gallery-thumb-active { border-color: #E8713E !important; }
-
-.gallery-fullview {
-  position: relative; margin-top: 10px;
-  display: flex; align-items: center; gap: 8px;
-}
-.gal-full-img {
-  flex: 1; width: 100%; max-height: 400px;
-  object-fit: contain; border-radius: 16px;
-  background: var(--bg-card);
-}
-.gal-nav {
-  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
-  background: var(--bg-card); border: 1px solid var(--bd);
-  color: var(--tx-2); font-size: 22px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-}
-.gal-nav:hover:not(:disabled) { background: rgba(216,90,48,0.1); border-color: rgba(216,90,48,0.4); color: #E8713E; }
-.gal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

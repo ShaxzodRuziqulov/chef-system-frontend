@@ -15,6 +15,8 @@ export interface CategoryRequest {
   colorCode?:   string
 }
 
+export type IngredientCategory = 'MEAT' | 'VEGETABLE' | 'FRUIT' | 'GRAIN' | 'DAIRY' | 'SPICE' | 'OIL' | 'OTHER'
+
 export interface IngredientDto {
   id:              number
   nameUz:          string
@@ -25,4 +27,5 @@ export interface IngredientDto {
   defaultUnit?:    string
   caloriesPer100g?: number
   allergen:        boolean
+  category?:       IngredientCategory
 }

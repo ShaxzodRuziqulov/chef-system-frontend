@@ -1054,4 +1054,11 @@ onMounted(() => {
   text-transform: uppercase;
   font-weight: 700;
 }
+
+@media (max-width: 480px) {
+  .login-page { padding: 12px; }
+  .card { padding: 24px 20px 32px; border-radius: 20px; }
+  .fp-overlay { padding: 0; align-items: flex-end; }
+  .fp-box { border-radius: 24px 24px 0 0; max-width: 100%; max-height: 82vh; overflow-y: auto; }
+}
 </style>

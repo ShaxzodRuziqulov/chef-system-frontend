@@ -68,9 +68,25 @@ const roleLabel = computed(() => {
 const memberSince = computed(() => formatDate(auth.user?.createdAt, 'month-year', lang.lang))
 
 const statsData = computed(() => [
-  { icon: '📝', val: recipes.value.length,    lbl: lang.t('profile.stat_recipes') },
-  { icon: '❤️',  val: favorites.count,         lbl: lang.t('profile.stat_saved')   },
-  { icon: '📅', val: mealPlanCount.value,     lbl: lang.t('profile.stat_meal')    },
+  {
+    val: recipes.value.length,
+    lbl: lang.t('profile.stat_recipes'),
+    color: '#3b82f6',
+    path: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
+  },
+  {
+    val: favorites.count,
+    lbl: lang.t('profile.stat_saved'),
+    color: '#ef4444',
+    fill: true,
+    path: 'M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z',
+  },
+  {
+    val: mealPlanCount.value,
+    lbl: lang.t('profile.stat_meal'),
+    color: '#E8713E',
+    path: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  },
 ])
 
 // ── Lifecycle ─────────────────────────────────────────────────────
@@ -394,6 +410,11 @@ async function confirmLeaveOshpaz() {
           <!-- Stats -->
           <div class="stats-bar">
             <div v-for="s in statsData" :key="s.lbl" class="stat-box">
+              <div class="stat-box-icon" :style="`color:${s.color}; background:${s.color}1a`">
+                <svg viewBox="0 0 24 24" :fill="s.fill ? 'currentColor' : 'none'" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="s.path"/>
+                </svg>
+              </div>
               <div class="stat-num">{{ s.val }}</div>
               <div class="stat-lbl">{{ s.lbl }}</div>
             </div>
@@ -949,7 +970,12 @@ async function confirmLeaveOshpaz() {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(216,90,48,0.1);
 }
-.stat-num { font-size: 24px; font-weight: 900; color: var(--tx-1); line-height: 1; }
+.stat-box-icon {
+  width: 38px; height: 38px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 2px;
+}
+.stat-box-icon svg { width: 18px; height: 18px; }
+.stat-num { font-size: 22px; font-weight: 900; color: var(--tx-1); line-height: 1; }
 .stat-lbl { font-size: 9px; font-weight: 800; color: var(--tx-5); text-transform: uppercase; letter-spacing: 0.07em; margin-top: 2px; }
 
 /* Actions */
@@ -1205,6 +1231,36 @@ async function confirmLeaveOshpaz() {
 .recipe-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 640px) { .recipe-grid { grid-template-columns: repeat(2, 1fr); } }
 
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .hero-body { padding: 0 16px 20px; }
+  .hero-cover { height: 80px; }
+  .ava-ring { width: 74px; height: 74px; margin-top: -37px; }
+  .ava-zone { margin-top: -37px; gap: 10px; }
+  .role-pill { font-size: 10px; padding: 3px 8px; }
+
+  .hero-name { font-size: 18px; }
+  .meta-chip { font-size: 11px; padding: 3px 8px; }
+  .hero-sub-row { margin-bottom: 12px; }
+
+  /* Stats — horizontal scroll on very small */
+  .stats-bar { grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }
+  .stat-box { padding: 10px 6px; border-radius: 12px; }
+  .stat-box-icon { width: 30px; height: 30px; border-radius: 8px; }
+  .stat-box-icon svg { width: 14px; height: 14px; }
+  .stat-num { font-size: 18px; }
+  .stat-lbl { font-size: 8px; }
+
+  /* Action buttons */
+  .hero-actions { gap: 8px; }
+  .btn-action { padding: 10px 12px; font-size: 12px; border-radius: 12px; }
+  .btn-action svg { width: 14px; height: 14px; }
+
+  /* Modals — bottom sheet */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal-box { border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto; }
+}
+
 .card-wrap    { position: relative; }
 .card-overlay {
   position: absolute; top: 8px; left: 8px;
@@ -1212,6 +1268,10 @@ async function confirmLeaveOshpaz() {
   opacity: 0; transition: opacity 0.2s; z-index: 2;
 }
 .card-wrap:hover .card-overlay { opacity: 1; }
+
+@media (hover: none) {
+  .card-overlay { opacity: 1; }
+}
 .ov-btn {
   width: 30px; height: 30px; border-radius: 8px; border: none;
   display: flex; align-items: center; justify-content: center;
@@ -1477,4 +1537,8 @@ async function confirmLeaveOshpaz() {
 .mfade-leave-active { transition: all 0.15s ease; }
 .mfade-enter-from  { opacity: 0; transform: scale(0.95) translateY(10px); }
 .mfade-leave-to    { opacity: 0; transform: scale(0.97); }
+
+@media (max-width: 480px) {
+  .skel-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>

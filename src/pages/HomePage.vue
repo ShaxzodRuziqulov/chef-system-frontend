@@ -325,28 +325,36 @@ onMounted(async () => {
     <!-- ── Personal Stats ── (only when logged in) -->
     <div v-if="auth.isAuthenticated" class="stats-row">
       <RouterLink to="/app/saved" class="stat-card stat-link">
-        <span class="stat-icon">❤️</span>
+        <div class="stat-icon-wrap stat-icon-wrap--red">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/></svg>
+        </div>
         <div>
           <div class="stat-num">{{ favorites.count }}</div>
           <div class="stat-label">{{ lang.t('home.stat_fav') }}</div>
         </div>
       </RouterLink>
       <RouterLink v-if="auth.isBlogger" to="/app/recipes" class="stat-card stat-link">
-        <span class="stat-icon">📖</span>
+        <div class="stat-icon-wrap stat-icon-wrap--blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        </div>
         <div>
           <div class="stat-num">{{ loading ? '—' : myRecipeCount }}</div>
           <div class="stat-label">{{ lang.t('home.stat_my') }}</div>
         </div>
       </RouterLink>
       <RouterLink to="/app/meal-plans" class="stat-card stat-link">
-        <span class="stat-icon">📅</span>
+        <div class="stat-icon-wrap stat-icon-wrap--orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="2" x2="8" y2="6" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="2" x2="16" y2="6" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
         <div>
           <div class="stat-num">{{ loading ? '—' : (todayMealsSorted.length || '—') }}</div>
           <div class="stat-label">{{ lang.t('home.today_stat') }}</div>
         </div>
       </RouterLink>
       <RouterLink to="/app/shopping-lists" class="stat-card stat-link">
-        <span class="stat-icon">🛒</span>
+        <div class="stat-icon-wrap stat-icon-wrap--green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        </div>
         <div>
           <div class="stat-num">→</div>
           <div class="stat-label">{{ lang.t('nav.shopping') }}</div>
@@ -419,7 +427,7 @@ onMounted(async () => {
       <section class="saved-widget">
         <div class="section-header">
           <h2 class="section-title">
-            <span class="section-icon">❤️</span>
+            <svg class="section-svg-icon section-svg-icon--red" viewBox="0 0 24 24" fill="currentColor"><path d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/></svg>
             {{ lang.t('home.saved') }}
             <span v-if="favorites.count > 0" class="section-count">{{ favorites.count }}</span>
           </h2>
@@ -454,7 +462,7 @@ onMounted(async () => {
     <section v-if="auth.isBlogger" class="section">
       <div class="section-header">
         <h2 class="section-title">
-          <span class="section-icon">📖</span>
+          <svg class="section-svg-icon section-svg-icon--blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
           {{ lang.t('home.my_recipes') }}
         </h2>
         <div class="section-header-right">
@@ -490,7 +498,7 @@ onMounted(async () => {
     <section class="section">
       <div class="section-header">
         <h2 class="section-title">
-          <span class="section-icon">🔥</span>
+          <svg class="section-svg-icon section-svg-icon--orange" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"/></svg>
           {{ lang.t('home.popular') }}
         </h2>
         <RouterLink to="/app/recipes" class="section-link">{{ lang.t('home.view_all') }}</RouterLink>
@@ -658,7 +666,15 @@ onMounted(async () => {
   background: var(--bg-card-lg);
   transform: translateY(-2px);
 }
-.stat-icon { font-size: 26px; line-height: 1; }
+.stat-icon-wrap {
+  width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.stat-icon-wrap svg { width: 20px; height: 20px; }
+.stat-icon-wrap--red    { background: rgba(239,68,68,0.12);  color: #ef4444; }
+.stat-icon-wrap--blue   { background: rgba(59,130,246,0.12); color: #3b82f6; }
+.stat-icon-wrap--orange { background: rgba(216,90,48,0.12);  color: #E8713E; }
+.stat-icon-wrap--green  { background: rgba(34,197,94,0.12);  color: #22c55e; }
 .stat-num { font-size: 22px; font-weight: 900; color: var(--tx-1); line-height: 1.1; }
 .stat-label { font-size: 10px; font-weight: 700; color: var(--tx-5); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
 
@@ -680,7 +696,10 @@ onMounted(async () => {
   align-items: center;
   gap: 7px;
 }
-.section-icon { font-size: 18px; }
+.section-svg-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.section-svg-icon--red    { color: #ef4444; }
+.section-svg-icon--blue   { color: #3b82f6; }
+.section-svg-icon--orange { color: #E8713E; }
 .section-count {
   display: inline-flex;
   align-items: center;
@@ -772,7 +791,7 @@ onMounted(async () => {
   scrollbar-width: none;
 }
 .recipe-grid-sm::-webkit-scrollbar { display: none; }
-.recipe-grid-sm > :deep(.recipe-card) {
+.recipe-grid-sm > :deep(.rc) {
   flex: 0 0 240px;
   width: 240px;
 }
@@ -780,7 +799,7 @@ onMounted(async () => {
   flex: 0 0 240px;
   width: 240px;
   border-radius: 20px;
-  height: 260px;
+  height: 244px;
   background: var(--bg-card-md);
   animation: pulse 1.5s ease-in-out infinite;
 }
@@ -1018,10 +1037,23 @@ onMounted(async () => {
 
 /* ── Welcome banner responsive ── */
 @media (max-width: 640px) {
-  .welcome-banner { padding: 20px; }
+  .welcome-banner { padding: 16px; flex-direction: column; align-items: flex-start; }
   .welcome-name { font-size: 18px; }
   .quick-actions { width: 100%; }
-  .qa-btn { flex: 1; justify-content: center; }
+  .qa-btn { flex: 1; justify-content: center; font-size: 12px; padding: 9px 10px; }
+  .avatar-wrap { width: 48px; height: 48px; }
+  .avatar-initials { font-size: 18px; }
+  .welcome-greeting { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 14px 10px; }
+  .stat-icon-wrap { width: 36px; height: 36px; border-radius: 10px; }
+  .stat-icon-wrap svg { width: 16px; height: 16px; }
+  .stat-num { font-size: 18px; }
+  .section-title { font-size: 15px; }
+  .today-widget, .saved-widget { border-radius: 16px; }
 }
 
 /* ── Onboarding ── */

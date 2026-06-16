@@ -413,6 +413,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.last_week':   "O'tgan hafta",
     'shop.weeks_later': "hafta keyin",
     'shop.weeks_ago':   "hafta oldin",
+    'shop.needed':      'Kerakli',
+    'shop.purchased':   'Sotib olindi',
 
     // Haftalik reja
     'meal.title':         'Haftalik reja',
@@ -955,6 +957,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.last_week':   "Прошлая неделя",
     'shop.weeks_later': "нед. вперёд",
     'shop.weeks_ago':   "нед. назад",
+    'shop.needed':      'Нужно купить',
+    'shop.purchased':   'Куплено',
 
     'meal.title':         'Недельный план',
     'meal.sub':           'Планируйте своё питание',
@@ -1496,6 +1500,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shop.last_week':   "Last week",
     'shop.weeks_later': "weeks ahead",
     'shop.weeks_ago':   "weeks ago",
+    'shop.needed':      'Needed',
+    'shop.purchased':   'Purchased',
 
     'meal.title':         'Meal Plan',
     'meal.sub':           'Plan your weekly meals',
