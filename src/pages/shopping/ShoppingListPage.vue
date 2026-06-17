@@ -17,20 +17,24 @@ const lang       = useLangStore()
 const toast      = useToast()
 
 const CATEGORY_META = {
-  MEAT:      { emoji: '🥩', uz: "Go'sht",          ru: 'Мясо',          en: 'Meat' },
-  VEGETABLE: { emoji: '🥕', uz: 'Sabzavot',         ru: 'Овощи',         en: 'Vegetables' },
-  FRUIT:     { emoji: '🍎', uz: 'Mevalar',           ru: 'Фрукты',        en: 'Fruits' },
-  GRAIN:     { emoji: '🌾', uz: 'Don va un',         ru: 'Крупы и мука',  en: 'Grains & Flour' },
-  DAIRY:     { emoji: '🥛', uz: 'Sut va tuxum',      ru: 'Молочные',      en: 'Dairy & Eggs' },
-  SPICE:     { emoji: '🧂', uz: 'Ziravorlar',        ru: 'Специи',        en: 'Spices' },
-  OIL:       { emoji: '🫙', uz: "Yog' va souslar",   ru: 'Масла и соусы', en: 'Oils & Sauces' },
-  OTHER:     { emoji: '🛒', uz: 'Boshqa',            ru: 'Прочее',        en: 'Other' },
+  MEAT:         { emoji: '🥩', uz: "Go'sht",            ru: 'Мясо',             en: 'Meat' },
+  VEGETABLE:    { emoji: '🥕', uz: 'Sabzavot',           ru: 'Овощи',            en: 'Vegetables' },
+  FRUIT:        { emoji: '🍎', uz: 'Mevalar',             ru: 'Фрукты',           en: 'Fruits' },
+  GRAIN:        { emoji: '🌾', uz: 'Don va un',           ru: 'Крупы и мука',     en: 'Grains & Flour' },
+  DAIRY:        { emoji: '🥛', uz: 'Sut va tuxum',        ru: 'Молочные',         en: 'Dairy & Eggs' },
+  SPICE:        { emoji: '🧂', uz: 'Ziravorlar',          ru: 'Специи',           en: 'Spices' },
+  OIL:          { emoji: '🫙', uz: "Yog' va souslar",     ru: 'Масла и соусы',    en: 'Oils & Sauces' },
+  NUTS:         { emoji: '🥜', uz: "Yong'oq va urug'lar", ru: 'Орехи и семена',   en: 'Nuts & Seeds' },
+  BAKING_AGENT: { emoji: '🧁', uz: 'Pishirish vositalari',ru: 'Для выпечки',      en: 'Baking Agents' },
+  SWEETENER:    { emoji: '🍯', uz: 'Shirinlik moddalari', ru: 'Подсластители',     en: 'Sweeteners' },
+  OTHER:        { emoji: '🛒', uz: 'Boshqa',              ru: 'Прочее',           en: 'Other' },
 }
 
 const CATEGORY_COLORS = {
   MEAT: '#ef4444', VEGETABLE: '#22c55e', FRUIT: '#f97316',
   GRAIN: '#eab308', DAIRY: '#60a5fa', SPICE: '#a855f7',
-  OIL: '#f59e0b', OTHER: '#6b7280',
+  OIL: '#f59e0b', NUTS: '#92400e', BAKING_AGENT: '#ec4899', SWEETENER: '#f59e0b',
+  OTHER: '#6b7280',
 }
 
 function categoryLabel(section) {
@@ -45,7 +49,7 @@ function categoryColor(section) {
 }
 
 function groupBySection(items) {
-  const order = ['MEAT','VEGETABLE','FRUIT','GRAIN','DAIRY','SPICE','OIL','OTHER']
+  const order = ['MEAT','VEGETABLE','FRUIT','GRAIN','DAIRY','SPICE','OIL','NUTS','BAKING_AGENT','SWEETENER','OTHER']
   const map = {}
   for (const item of items) {
     const key = item.grocerySection || 'OTHER'
@@ -527,16 +531,16 @@ const totalDone  = computed(() => lists.value.reduce((s, l) => s + purchasedCoun
         <span class="empty-emoji">🛒</span>
       </div>
 
-      <h2 class="empty-title">Hali ro'yxat yo'q</h2>
-      <p class="empty-sub">Haftalik reja asosida bir zumda yarating va do'konga boring</p>
+      <h2 class="empty-title">{{ lang.t('shop.empty_title') }}</h2>
+      <p class="empty-sub">{{ lang.t('shop.empty_sub') }}</p>
 
       <!-- Steps guide -->
       <div class="steps-guide">
         <div class="step-item">
           <div class="step-num">1</div>
           <div class="step-content">
-            <div class="step-title">Haftalik reja tanlang</div>
-            <div class="step-hint">Yuqoridagi ochiladigan ro'yxatdan</div>
+            <div class="step-title">{{ lang.t('shop.step1_title') }}</div>
+            <div class="step-hint">{{ lang.t('shop.step1_hint') }}</div>
           </div>
         </div>
         <div class="step-connector">
@@ -547,8 +551,8 @@ const totalDone  = computed(() => lists.value.reduce((s, l) => s + purchasedCoun
         <div class="step-item">
           <div class="step-num">2</div>
           <div class="step-content">
-            <div class="step-title">Ro'yxat yarating</div>
-            <div class="step-hint">Ingredientlar avtomatik qo'shiladi</div>
+            <div class="step-title">{{ lang.t('shop.step2_title') }}</div>
+            <div class="step-hint">{{ lang.t('shop.step2_hint') }}</div>
           </div>
         </div>
         <div class="step-connector">
@@ -559,8 +563,8 @@ const totalDone  = computed(() => lists.value.reduce((s, l) => s + purchasedCoun
         <div class="step-item">
           <div class="step-num">3</div>
           <div class="step-content">
-            <div class="step-title">Do'konga boring!</div>
-            <div class="step-hint">Birma-bir belgilab chiqing</div>
+            <div class="step-title">{{ lang.t('shop.step3_title') }}</div>
+            <div class="step-hint">{{ lang.t('shop.step3_hint') }}</div>
           </div>
         </div>
       </div>
@@ -569,7 +573,7 @@ const totalDone  = computed(() => lists.value.reduce((s, l) => s + purchasedCoun
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
         </svg>
-        Ro'yxat yaratishni boshlash
+        {{ lang.t('shop.start_btn') }}
       </button>
     </div>
 
