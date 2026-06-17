@@ -461,13 +461,13 @@ onBeforeUnmount(() => {
           </div>
           <div class="footer-col">
             <div class="footer-col-title">{{ lang.t('landing.footer_company') }}</div>
-            <a href="#">{{ lang.t('landing.footer_about') }}</a>
-            <a href="mailto:info@oshpaz.uz">{{ lang.t('landing.footer_contact') }}</a>
+            <RouterLink to="/app/about">{{ lang.t('landing.footer_about') }}</RouterLink>
+            <RouterLink to="/app/contact">{{ lang.t('landing.footer_contact') }}</RouterLink>
           </div>
           <div class="footer-col">
             <div class="footer-col-title">{{ lang.t('landing.footer_legal') }}</div>
-            <a href="#">{{ lang.t('landing.footer_privacy') }}</a>
-            <a href="#">{{ lang.t('landing.footer_terms') }}</a>
+            <RouterLink to="/app/privacy">{{ lang.t('landing.footer_privacy') }}</RouterLink>
+            <RouterLink to="/app/terms">{{ lang.t('landing.footer_terms') }}</RouterLink>
           </div>
         </div>
       </div>

@@ -1,284 +1,398 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter }             from 'vue-router'
-import { recipesApi    }                   from '@/api/recipes'
-import { categoriesApi }                   from '@/api/categories'
-import RecipeCard                          from '@/components/recipe/RecipeCard.vue'
-import { useLangStore }                    from '@/stores/langStore'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute }      from 'vue-router'
+import { recipesApi }    from '@/api/recipes'
+import { categoriesApi } from '@/api/categories'
+import RecipeCard        from '@/components/recipe/RecipeCard.vue'
+import { useLangStore }  from '@/stores/langStore'
 
-const lang = useLangStore()
+const lang  = useLangStore()
+const route = useRoute()
 
-const route  = useRoute()
-const router = useRouter()
-
+// ── State ─────────────────────────────────────────────────────────
 const recipes       = ref([])
 const categories    = ref([])
 const loading       = ref(true)
-const totalPages    = ref(0)
+const loadingMore   = ref(false)
 const totalElements = ref(0)
+const totalPages    = ref(0)
+const searchQuery   = ref(String(route.query.keyword ?? ''))
 
 const filters = ref({
-  keyword:    route.query.keyword    || '',
-  category:   route.query.category   ? Number(route.query.category) : null,
-  difficulty: route.query.difficulty || '',
-  page:       Number(route.query.page) || 0,
+  keyword:    String(route.query.keyword    ?? ''),
+  category:   route.query.category ? Number(route.query.category) : null,
+  difficulty: String(route.query.difficulty ?? ''),
+  sort:       'createdAt,desc',
+  page:       0,
 })
 
+// ── Options ───────────────────────────────────────────────────────
 const difficulties = computed(() => [
-  { value: 'EASY',   label: lang.t('common.easy'),   icon: '🟢', cls: 'chip-easy'   },
-  { value: 'MEDIUM', label: lang.t('common.medium'),  icon: '🟡', cls: 'chip-medium' },
-  { value: 'HARD',   label: lang.t('common.hard'),    icon: '🔴', cls: 'chip-hard'   },
+  { value: 'EASY',   label: lang.t('common.easy'),   color: '#10b981' },
+  { value: 'MEDIUM', label: lang.t('common.medium'),  color: '#eab308' },
+  { value: 'HARD',   label: lang.t('common.hard'),    color: '#ef4444' },
 ])
 
-const hasActiveFilters = computed(
-  () => !!filters.value.keyword || !!filters.value.category || !!filters.value.difficulty
+const sortOptions = [
+  { value: 'createdAt,desc',     label: 'Yangi'   },
+  { value: 'viewCount,desc',     label: 'Mashhur' },
+  { value: 'averageRating,desc', label: 'Top ★'   },
+]
+
+// ── Derived ───────────────────────────────────────────────────────
+const hasMore          = computed(() => filters.value.page < totalPages.value - 1)
+const hasActiveFilters = computed(() =>
+  !!filters.value.keyword || !!filters.value.category || !!filters.value.difficulty
 )
 
-async function fetchRecipes() {
-  loading.value = true
+// ── Fetch ─────────────────────────────────────────────────────────
+async function fetchRecipes(reset = false) {
+  if (reset) { loading.value = true; filters.value.page = 0 }
+  else loadingMore.value = true
+
   try {
-    const params = { page: filters.value.page, size: 12 }
+    const params = { page: filters.value.page, size: 12, sort: filters.value.sort }
     let res
 
-    if (filters.value.keyword) {
-      res = await recipesApi.search(filters.value.keyword, params)
-    } else if (filters.value.category) {
-      res = await recipesApi.getByCategory(filters.value.category, params)
-    } else if (filters.value.difficulty) {
-      res = await recipesApi.getByDifficulty(filters.value.difficulty, params)
-    } else {
-      res = await recipesApi.getAll(params)
-    }
+    if (filters.value.keyword)         res = await recipesApi.search(filters.value.keyword, params)
+    else if (filters.value.category)   res = await recipesApi.getByCategory(filters.value.category, params)
+    else if (filters.value.difficulty) res = await recipesApi.getByDifficulty(filters.value.difficulty, params)
+    else                               res = await recipesApi.getAll(params)
 
-    const page = res.data?.data ?? res.data
-    recipes.value       = page?.content      ?? []
-    totalPages.value    = page?.totalPages   ?? 0
+    const page    = res.data?.data ?? res.data
+    const content = page?.content  ?? []
+
+    recipes.value       = reset ? content : [...recipes.value, ...content]
+    totalPages.value    = page?.totalPages    ?? 0
     totalElements.value = page?.totalElements ?? 0
-  } catch (e) {
-    console.error(e)
-    recipes.value = []
+  } catch {
+    if (reset) recipes.value = []
   } finally {
-    loading.value = false
+    loading.value     = false
+    loadingMore.value = false
   }
 }
 
-function applyFilter() {
-  filters.value.page = 0
-  fetchRecipes()
+// ── Filter actions ─────────────────────────────────────────────────
+let searchTimer = null
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    filters.value.keyword    = searchQuery.value
+    filters.value.category   = null
+    filters.value.difficulty = ''
+    fetchRecipes(true)
+  }, 320)
 }
 
-function setCategory(id) {
-  filters.value.category   = filters.value.category === id ? null : id
-  filters.value.difficulty = ''
+function clearSearch() {
+  searchQuery.value     = ''
+  filters.value.keyword = ''
+  fetchRecipes(true)
+}
+
+function selectCategory(id) {
+  const same = filters.value.category === id
+  filters.value.category   = same ? null : id
   filters.value.keyword    = ''
-  applyFilter()
+  filters.value.difficulty = ''
+  if (!same) searchQuery.value = ''
+  fetchRecipes(true)
 }
 
-function setDifficulty(val) {
+function selectDifficulty(val) {
   filters.value.difficulty = filters.value.difficulty === val ? '' : val
   filters.value.category   = null
-  applyFilter()
+  fetchRecipes(true)
 }
 
-function setPage(p) {
-  filters.value.page = p
-  fetchRecipes()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+function setSort(val) {
+  filters.value.sort = val
+  fetchRecipes(true)
 }
 
-function resetFilters() {
-  filters.value = { keyword: '', category: null, difficulty: '', page: 0 }
-  fetchRecipes()
+function resetAll() {
+  searchQuery.value        = ''
+  filters.value.keyword    = ''
+  filters.value.category   = null
+  filters.value.difficulty = ''
+  fetchRecipes(true)
 }
 
-function pageRange() {
-  const total = totalPages.value
-  const cur   = filters.value.page
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i)
-  const start = Math.max(0, Math.min(cur - 3, total - 7))
-  return Array.from({ length: 7 }, (_, i) => start + i)
+function diffStyle(d) {
+  if (filters.value.difficulty !== d.value) return {}
+  return {
+    background:   `${d.color}1f`,
+    borderColor:  `${d.color}66`,
+    color:         d.color,
+    boxShadow:    `0 2px 8px ${d.color}30`,
+  }
+}
+
+// ── Infinite scroll ────────────────────────────────────────────────
+const sentinel = ref(null)
+let   io       = null
+
+function connectIO() {
+  io?.disconnect()
+  if (!sentinel.value) return
+  io = new IntersectionObserver(([e]) => {
+    if (e.isIntersecting && hasMore.value && !loadingMore.value && !loading.value) {
+      filters.value.page++
+      fetchRecipes(false)
+    }
+  }, { rootMargin: '300px' })
+  io.observe(sentinel.value)
 }
 
 onMounted(async () => {
-  const [, c] = await Promise.all([fetchRecipes(), categoriesApi.getAll()])
-  categories.value = c.data?.data ?? c.data ?? []
+  const [, catRes] = await Promise.all([fetchRecipes(true), categoriesApi.getAll()])
+  categories.value = catRes.data?.data ?? catRes.data ?? []
+  connectIO()
+})
+onUnmounted(() => io?.disconnect())
+watch(sentinel, el => { if (el) connectIO() })
 
-  // Apply URL category filter after categories load
-  if (route.query.category) {
-    filters.value.category = Number(route.query.category)
-    fetchRecipes()
-  }
+watch(() => route.query.keyword, kw => {
+  if (kw === undefined) return
+  searchQuery.value        = String(kw ?? '')
+  filters.value.keyword    = String(kw ?? '')
+  filters.value.category   = null
+  filters.value.difficulty = ''
+  fetchRecipes(true)
 })
 
-watch(() => route.query.keyword, (kw) => {
-  if (kw !== undefined) {
-    filters.value.keyword    = kw
-    filters.value.category   = null
-    filters.value.difficulty = ''
-    filters.value.page       = 0
-    fetchRecipes()
-  }
+watch(() => route.query.category, cat => {
+  if (cat === undefined) return
+  filters.value.category   = cat ? Number(cat) : null
+  filters.value.keyword    = ''
+  filters.value.difficulty = ''
+  searchQuery.value        = ''
+  fetchRecipes(true)
 })
 </script>
 
 <template>
   <div class="page">
 
-    <!-- Page header -->
-    <div class="page-header">
-      <div>
+    <!-- ── Top bar ────────────────────────────────────────────── -->
+    <div class="topbar">
+      <div class="topbar-left">
         <h1 class="page-title">{{ lang.t('recipes.title') }}</h1>
-        <p v-if="!loading && totalElements" class="page-sub">
-          {{ totalElements.toLocaleString() }} {{ lang.t('recipes.count') }}
-        </p>
+        <Transition name="pop">
+          <span v-if="!loading && totalElements" class="count-badge">
+            {{ totalElements.toLocaleString() }}
+          </span>
+        </Transition>
+      </div>
+
+      <div class="sort-seg">
+        <button
+          v-for="s in sortOptions" :key="s.value"
+          class="sort-btn"
+          :class="{ 'sort-btn--active': filters.sort === s.value }"
+          @click="setSort(s.value)"
+        >{{ s.label }}</button>
       </div>
     </div>
 
-    <!-- Search bar -->
-    <div class="search-wrap">
-      <svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+    <!-- ── Search ─────────────────────────────────────────────── -->
+    <div class="search-box">
+      <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
           d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
       </svg>
       <input
-        v-model="filters.keyword"
-        @input="applyFilter"
+        v-model="searchQuery"
+        @input="onSearchInput"
         type="text"
+        autocomplete="off"
+        spellcheck="false"
         :placeholder="lang.t('recipes.search')"
         class="search-input"
       />
-      <button v-if="filters.keyword" @click="filters.keyword = ''; applyFilter()" class="clear-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Filter chips block -->
-    <div class="filters-block">
-
-      <!-- Difficulty chips -->
-      <div class="filter-group">
-        <span class="filter-group-label">{{ lang.t('recipes.all_levels') }}</span>
-        <div class="chips-row">
-          <button
-            v-for="d in difficulties"
-            :key="d.value"
-            @click="setDifficulty(d.value)"
-            class="chip"
-            :class="[d.cls, { 'chip-active': filters.difficulty === d.value }]"
-          >
-            <span class="chip-dot"></span>
-            {{ d.label }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Category chips -->
-      <div class="filter-group">
-        <span class="filter-group-label">{{ lang.t('recipes.all_categories') }}</span>
-        <div class="chips-row chips-scroll">
-          <button
-            v-for="c in categories"
-            :key="c.id"
-            @click="setCategory(c.id)"
-            class="chip chip-cat"
-            :class="{ 'chip-active chip-cat-active': filters.category === c.id }"
-          >
-            {{ lang.catName(c) }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Reset -->
-      <div v-if="hasActiveFilters" class="filter-reset-row">
-        <button @click="resetFilters" class="reset-btn">
+      <Transition name="scale">
+        <button v-if="searchQuery" @click="clearSearch" class="search-clear">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
           </svg>
-          {{ lang.t('recipes.reset') }}
         </button>
+      </Transition>
+    </div>
+
+    <!-- ── Category tabs ──────────────────────────────────────── -->
+    <div class="cat-scroll">
+      <div class="cat-track">
+        <button
+          class="cat-tab"
+          :class="{ 'cat-tab--on': !filters.category && !filters.difficulty && !filters.keyword }"
+          @click="resetAll"
+        >
+          <span class="cat-all-icon">
+            <svg viewBox="0 0 16 16" fill="currentColor">
+              <rect x="1" y="1" width="5.5" height="5.5" rx="1.5"/>
+              <rect x="9.5" y="1" width="5.5" height="5.5" rx="1.5"/>
+              <rect x="1" y="9.5" width="5.5" height="5.5" rx="1.5"/>
+              <rect x="9.5" y="9.5" width="5.5" height="5.5" rx="1.5"/>
+            </svg>
+          </span>
+          Barchasi
+        </button>
+        <button
+          v-for="c in categories" :key="c.id"
+          class="cat-tab"
+          :class="{ 'cat-tab--on': filters.category === c.id }"
+          @click="selectCategory(c.id)"
+        >{{ lang.catName(c) }}</button>
       </div>
     </div>
 
-    <!-- Skeleton -->
-    <div v-if="loading" class="recipe-grid">
-      <div v-for="i in 12" :key="i" class="skeleton-card" />
+    <!-- ── Difficulty + clear row ─────────────────────────────── -->
+    <div class="filter-row">
+      <button
+        v-for="d in difficulties" :key="d.value"
+        class="diff-pill"
+        :class="{ 'diff-pill--on': filters.difficulty === d.value }"
+        :style="diffStyle(d)"
+        @click="selectDifficulty(d.value)"
+      >
+        <span class="diff-dot" :style="`background: ${d.color}`"/>
+        {{ d.label }}
+      </button>
+
+      <Transition name="scale">
+        <button v-if="hasActiveFilters" @click="resetAll" class="clear-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+          Tozalash
+        </button>
+      </Transition>
     </div>
 
-    <!-- Grid -->
-    <div v-else-if="recipes.length" class="recipe-grid">
-      <RecipeCard v-for="r in recipes" :key="r.id" :recipe="r" />
+    <!-- ── Skeleton ───────────────────────────────────────────── -->
+    <div v-if="loading" class="grid">
+      <div v-for="i in 12" :key="i" class="skel" :class="{ 'skel--wide': i === 1 }"/>
     </div>
 
-    <!-- Empty -->
-    <div v-else class="empty-state">
-      <div class="empty-icon">🔍</div>
+    <!-- ── Grid ──────────────────────────────────────────────── -->
+    <template v-else-if="recipes.length">
+      <div class="grid">
+        <RecipeCard
+          v-for="(r, i) in recipes" :key="r.id"
+          :recipe="r"
+          class="card-in"
+          :class="{ 'card--wide': i === 0 }"
+          :style="`animation-delay:${Math.min(i % 12, 9) * 40}ms`"
+        />
+      </div>
+
+      <div ref="sentinel" class="sentinel">
+        <Transition name="fade">
+          <div v-if="loadingMore" class="loading-ring">
+            <span class="ring"/>
+          </div>
+        </Transition>
+      </div>
+    </template>
+
+    <!-- ── Empty ─────────────────────────────────────────────── -->
+    <div v-else class="empty">
+      <div class="empty-circle">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="32" cy="32" r="30" stroke="var(--bd)" stroke-width="2"/>
+          <path d="M20 42 Q32 26 44 42" stroke="var(--tx-5)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="23" cy="27" r="3" fill="var(--tx-5)"/>
+          <circle cx="41" cy="27" r="3" fill="var(--tx-5)"/>
+        </svg>
+      </div>
       <p class="empty-title">{{ lang.t('recipes.not_found') }}</p>
       <p class="empty-sub">{{ lang.t('recipes.not_found_sub') }}</p>
-      <button @click="resetFilters" class="empty-action">{{ lang.t('recipes.reset') }}</button>
-    </div>
-
-    <!-- Pagination -->
-    <div v-if="totalPages > 1" class="pagination">
-      <button
-        @click="setPage(filters.page - 1)"
-        :disabled="filters.page === 0"
-        class="page-btn page-nav"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-        </svg>
-      </button>
-
-      <button
-        v-for="p in pageRange()"
-        :key="p"
-        @click="setPage(p)"
-        class="page-btn"
-        :class="{ 'page-active': filters.page === p }"
-      >{{ p + 1 }}</button>
-
-      <button
-        @click="setPage(filters.page + 1)"
-        :disabled="filters.page >= totalPages - 1"
-        class="page-btn page-nav"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-        </svg>
-      </button>
+      <button @click="resetAll" class="empty-btn">{{ lang.t('recipes.reset') }}</button>
     </div>
 
   </div>
 </template>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 16px; }
+/* ── Page ─────────────────────────────────────────────────────────── */
+.page { display: flex; flex-direction: column; gap: 14px; }
 
-/* Header */
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; }
-.page-title  { font-size: 22px; font-weight: 900; color: var(--tx-1); }
-.page-sub    { font-size: 13px; color: var(--tx-5); margin-top: 3px; }
-
-/* ── Search ── */
-.search-wrap {
+/* ── Top bar ──────────────────────────────────────────────────────── */
+.topbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.page-title  { font-size: 22px; font-weight: 900; color: var(--tx-1); letter-spacing: -0.3px; }
+
+.count-badge {
+  padding: 3px 10px;
+  background: rgba(216,90,48,0.1);
+  border: 1px solid rgba(216,90,48,0.22);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #E8713E;
+}
+
+/* Sort segment control */
+.sort-seg {
+  display: flex;
+  gap: 2px;
   background: var(--bg-card);
   border: 1px solid var(--bd);
-  border-radius: 14px;
-  padding: 0 14px;
-  height: 48px;
+  border-radius: 12px;
+  padding: 3px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.sort-btn {
+  padding: 5px 13px;
+  border-radius: 9px;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tx-5);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.sort-btn:hover:not(.sort-btn--active) { color: var(--tx-3); }
+.sort-btn--active {
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(216,90,48,0.35);
+}
+
+/* ── Search ───────────────────────────────────────────────────────── */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 16px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--bd);
+  border-radius: 16px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.search-wrap:focus-within {
-  border-color: rgba(216, 90, 48, 0.5);
+.search-box:focus-within {
+  border-color: rgba(216,90,48,0.5);
+  box-shadow: 0 0 0 3px rgba(216,90,48,0.1), 0 1px 4px rgba(0,0,0,0.06);
 }
-.si { width: 18px; height: 18px; color: var(--tx-5); flex-shrink: 0; }
+.search-ico {
+  width: 18px;
+  height: 18px;
+  color: var(--tx-5);
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.search-box:focus-within .search-ico { color: #E8713E; }
 .search-input {
   flex: 1;
   background: none;
@@ -289,244 +403,245 @@ watch(() => route.query.keyword, (kw) => {
   min-width: 0;
 }
 .search-input::placeholder { color: var(--tx-6); }
-.clear-btn {
-  background: none;
+.search-clear {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   border: none;
+  background: var(--bg-input);
   color: var(--tx-5);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
-.clear-btn svg { width: 14px; height: 14px; }
-.clear-btn:hover { color: var(--tx-3); }
+.search-clear svg  { width: 12px; height: 12px; }
+.search-clear:hover { background: rgba(239,68,68,0.12); color: #ef4444; }
 
-/* ── Filters Block ── */
-.filters-block {
-  background: var(--bg-card);
-  border: 1px solid var(--bd);
-  border-radius: 18px;
-  padding: 16px 20px;
+/* ── Category tabs ────────────────────────────────────────────────── */
+.cat-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -2px;
+  padding: 2px;
+}
+.cat-scroll::-webkit-scrollbar { display: none; }
+
+.cat-track {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  gap: 6px;
+  width: max-content;
 }
 
-.filter-group {
+.cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 100px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg-card);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx-4);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.18s, color 0.18s, background 0.18s, transform 0.15s, box-shadow 0.18s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.cat-tab:hover:not(.cat-tab--on) {
+  border-color: rgba(216,90,48,0.35);
+  color: #E8713E;
+  background: rgba(216,90,48,0.06);
+  transform: translateY(-1px);
+}
+.cat-tab--on {
+  background: linear-gradient(135deg, #D85A30, #E8713E);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(216,90,48,0.32);
+  transform: translateY(-1px);
+}
+
+.cat-all-icon {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  opacity: 0.7;
 }
-.filter-group-label {
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--tx-5);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
-  min-width: 80px;
-}
+.cat-tab--on .cat-all-icon { opacity: 0.9; }
+.cat-all-icon svg { width: 12px; height: 12px; }
 
-/* Chips row */
-.chips-row {
+/* ── Difficulty + clear ───────────────────────────────────────────── */
+.filter-row {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
-.chips-scroll {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-}
-.chips-scroll::-webkit-scrollbar { display: none; }
 
-/* ── Chip base ── */
-.chip {
+.diff-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
   border-radius: 100px;
+  border: 1.5px solid var(--bd);
+  background: var(--bg-card);
   font-size: 12px;
   font-weight: 700;
-  border: 1.5px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-  background: var(--bg-input);
   color: var(--tx-4);
-  border-color: var(--bd-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s, border-color 0.18s, color 0.18s, background 0.18s, box-shadow 0.18s;
 }
-.chip:hover {
-  transform: translateY(-1px);
-}
-
-/* Dot indicator */
-.chip-dot {
+.diff-pill:hover:not(.diff-pill--on) { transform: translateY(-1px); }
+.diff-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-/* Difficulty variants */
-.chip-easy   .chip-dot { background: #10b981; }
-.chip-medium .chip-dot { background: #eab308; }
-.chip-hard   .chip-dot { background: #ef4444; }
-
-.chip-easy:hover,   .chip-easy.chip-active   { background: rgba(16, 185, 129, 0.12); border-color: rgba(16,185,129,0.4);  color: #10b981; }
-.chip-medium:hover, .chip-medium.chip-active { background: rgba(234, 179, 8, 0.12);  border-color: rgba(234,179,8,0.4);   color: #ca8a04; }
-.chip-hard:hover,   .chip-hard.chip-active   { background: rgba(239, 68, 68, 0.12);  border-color: rgba(239,68,68,0.4);   color: #ef4444; }
-
-/* Category chips */
-.chip-cat:hover {
-  background: rgba(216,90,48,0.08);
-  border-color: rgba(216,90,48,0.3);
-  color: #E8713E;
-}
-.chip-cat-active {
-  background: rgba(216,90,48,0.14) !important;
-  border-color: rgba(216,90,48,0.5) !important;
-  color: #E8713E !important;
-}
-
-/* Reset row */
-.filter-reset-row { display: flex; }
-.reset-btn {
+.clear-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: rgba(239,68,68,0.08);
-  border: 1px solid rgba(239,68,68,0.2);
+  gap: 5px;
+  padding: 6px 12px;
   border-radius: 100px;
+  border: 1.5px solid rgba(239,68,68,0.22);
+  background: rgba(239,68,68,0.07);
   color: #f87171;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.18s, border-color 0.18s;
+  margin-left: auto;
 }
-.reset-btn:hover { background: rgba(239,68,68,0.16); }
-.reset-btn svg { width: 12px; height: 12px; }
+.clear-pill svg    { width: 11px; height: 11px; }
+.clear-pill:hover  { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.4); }
 
-/* Grid */
-.recipe-grid {
+/* ── Grid ─────────────────────────────────────────────────────────── */
+.grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
-@media (max-width: 1200px) { .recipe-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 768px)  { .recipe-grid { grid-template-columns: repeat(2, 1fr); } }
+.card--wide { grid-column: span 2; }
+.card--wide :deep(.rc-img) { aspect-ratio: 16 / 7; }
 
-@media (max-width: 600px) {
-  .filters-block { padding: 12px 14px; gap: 10px; }
-  .page-title { font-size: 18px; }
+@media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 800px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
 
-  .filter-group {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  .filter-group-label { min-width: unset; }
-
-  /* chips row mobileda to'liq kenglik + scroll ishlashi uchun */
-  .chips-row { width: 100%; }
-  .chips-scroll {
-    width: 100%;
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+/* Card entry animation */
+.card-in { animation: cardIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 
-@media (max-width: 480px) {
-  .recipe-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-}
-
-/* Skeleton */
-.skeleton-card {
+/* ── Skeleton ─────────────────────────────────────────────────────── */
+.skel {
   border-radius: 20px;
   aspect-ratio: 3/2;
-  background: var(--bg-card-md);
-  animation: pulse 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    110deg,
+    var(--bg-card-md) 0%,
+    var(--bg-card-md) 40%,
+    var(--bg-card) 50%,
+    var(--bg-card-md) 60%,
+    var(--bg-card-md) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+.skel--wide { grid-column: span 2; aspect-ratio: 16 / 7; }
+
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-/* Empty */
-.empty-state {
+/* ── Infinite scroll sentinel ─────────────────────────────────────── */
+.sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+}
+.loading-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.ring {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--bd);
+  border-top-color: #E8713E;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Empty state ──────────────────────────────────────────────────── */
+.empty {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 10px;
   padding: 80px 24px;
   background: var(--bg-card);
   border: 1px solid var(--bd);
   border-radius: 24px;
-  gap: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
-.empty-icon   { font-size: 56px; margin-bottom: 8px; }
-.empty-title  { font-size: 16px; font-weight: 800; color: var(--tx-4); }
-.empty-sub    { font-size: 13px; color: var(--tx-6); }
-.empty-action {
+.empty-circle  { width: 80px; height: 80px; margin-bottom: 6px; opacity: 0.6; }
+.empty-title   { font-size: 16px; font-weight: 800; color: var(--tx-3); margin: 0; }
+.empty-sub     { font-size: 13px; color: var(--tx-5); margin: 0; text-align: center; max-width: 260px; line-height: 1.6; }
+.empty-btn {
   margin-top: 8px;
-  padding: 10px 22px;
-  background: rgba(216,90,48,0.12);
-  border: 1px solid rgba(216,90,48,0.25);
+  padding: 10px 24px;
   border-radius: 12px;
-  color: #E8713E;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.empty-action:hover { background: rgba(216,90,48,0.2); }
-
-/* Pagination */
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding-top: 8px;
-}
-.page-btn {
-  min-width: 38px;
-  height: 38px;
-  padding: 0 6px;
-  border-radius: 10px;
-  border: 1px solid var(--bd-md);
-  background: var(--bg-card-md);
-  color: var(--tx-4);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.page-btn:hover:not(:disabled) {
-  border-color: rgba(216,90,48,0.4);
-  color: #E8713E;
-  background: rgba(216,90,48,0.08);
-}
-.page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.page-active {
+  border: none;
   background: linear-gradient(135deg, #D85A30, #E8713E);
-  border-color: transparent;
   color: #fff;
-  box-shadow: 0 4px 12px rgba(216,90,48,0.35);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.18s, transform 0.15s;
+  box-shadow: 0 4px 14px rgba(216,90,48,0.3);
 }
-.page-nav svg { width: 16px; height: 16px; }
+.empty-btn:hover { opacity: 0.88; transform: translateY(-1px); }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 1; }
+/* ── Transitions ──────────────────────────────────────────────────── */
+.scale-enter-active, .scale-leave-active {
+  transition: opacity 0.16s, transform 0.16s;
+}
+.scale-enter-from, .scale-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.pop-enter-active, .pop-leave-active {
+  transition: opacity 0.22s, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pop-enter-from, .pop-leave-to {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from,  .fade-leave-to      { opacity: 0; }
+
+/* ── Mobile ───────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .page-title { font-size: 18px; }
+  .sort-btn   { padding: 5px 9px; font-size: 11px; }
+  .search-box { height: 46px; border-radius: 14px; padding: 0 12px; }
+  .cat-tab    { padding: 7px 14px; font-size: 12px; }
 }
 </style>

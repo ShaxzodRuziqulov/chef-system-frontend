@@ -46,6 +46,9 @@ export const recipesApi = {
   delete: (id: number): Promise<AxiosResponse<void>> =>
     api.delete(`/recipes/${id}`),
 
+  getSimilar: (id: number | string, limit = 6): Promise<AxiosResponse<ApiResponse<RecipeDto[]>>> =>
+    api.get(`/recipes/${id}/similar`, { params: { limit } }),
+
   incrementView: (id: number | string): Promise<AxiosResponse<void>> =>
     api.post(`/recipes/${id}/view`),
 

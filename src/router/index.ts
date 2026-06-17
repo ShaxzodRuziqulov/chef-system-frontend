@@ -93,6 +93,30 @@ const routes: RouteRecordRaw[] = [
         component:    () => import('@/pages/AdminPage.vue'),
         meta:         { requiresAuth: true, requiresAdmin: true, title: 'Admin Panel' },
       },
+      {
+        path:      'about',
+        name:      'About',
+        component: () => import('@/pages/static/AboutPage.vue'),
+        meta:      { title: 'Biz haqimizda' },
+      },
+      {
+        path:      'privacy',
+        name:      'Privacy',
+        component: () => import('@/pages/static/PrivacyPage.vue'),
+        meta:      { title: 'Maxfiylik siyosati' },
+      },
+      {
+        path:      'terms',
+        name:      'Terms',
+        component: () => import('@/pages/static/TermsPage.vue'),
+        meta:      { title: 'Foydalanish shartlari' },
+      },
+      {
+        path:      'contact',
+        name:      'Contact',
+        component: () => import('@/pages/static/ContactPage.vue'),
+        meta:      { title: "Bog'lanish" },
+      },
     ],
   },
 

@@ -28,6 +28,7 @@ const recipe           = ref(null)
 const loading          = ref(true)
 const tab              = ref('ingredients')
 const activeGalleryIdx = ref(null)
+const similarRecipes   = ref([])
 
 function scrollToVideo() {
   document.getElementById('recipe-video')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -223,6 +224,42 @@ onMounted(async () => {
       ratingCount.value = recipe.value.ratingCount   ?? 0
       loadRating(recipe.value.id)
       recipesApi.incrementView(recipe.value.id).catch(() => {})
+      if (recipe.value.categoryId) {
+        recipesApi.getSimilar(recipe.value.id, 6)
+          .then(r => { similarRecipes.value = r.data?.data ?? [] })
+          .catch(() => {})
+      }
+    }
+  } catch {
+    router.push('/app/recipes')
+  } finally {
+    loading.value = false
+  }
+})
+
+watch(() => route.params.id, async (newId) => {
+  if (!newId) return
+  loading.value = true
+  similarRecipes.value = []
+  tab.value = 'ingredients'
+  try {
+    const res = await recipesApi.getById(newId)
+    recipe.value = res.data?.data ?? res.data
+    if (recipe.value) {
+      servings.value    = recipe.value.servings ?? 1
+      avgRating.value   = recipe.value.averageRating ?? 0
+      ratingCount.value = recipe.value.ratingCount   ?? 0
+      checkedIngs.value = new Set()
+      comments.value    = []
+      commentsPage.value = 0
+      commentsLast.value = false
+      loadRating(recipe.value.id)
+      recipesApi.incrementView(recipe.value.id).catch(() => {})
+      if (recipe.value.categoryId) {
+        recipesApi.getSimilar(recipe.value.id, 6)
+          .then(r => { similarRecipes.value = r.data?.data ?? [] })
+          .catch(() => {})
+      }
     }
   } catch {
     router.push('/app/recipes')
@@ -262,7 +299,11 @@ onMounted(async () => {
 
       <!-- Bottom badges -->
       <div class="hero-bottom">
-        <span v-if="recipe.categoryNameUz" class="hero-badge hero-badge--cat">{{ lang.catName(recipe) }}</span>
+        <span
+          v-if="recipe.categoryNameUz"
+          class="hero-badge hero-badge--cat hero-badge--clickable"
+          @click="router.push({ name: 'Recipes', query: { category: recipe.categoryId } })"
+        >{{ lang.catName(recipe) }}</span>
         <span v-if="recipe.difficultyLevel" class="hero-badge" :class="diffMap[recipe.difficultyLevel]?.cls">
           {{ diffMap[recipe.difficultyLevel]?.label }}
         </span>
@@ -653,6 +694,71 @@ onMounted(async () => {
           <span v-else>{{ lang.t('recipe.show_more') }}</span>
         </button>
       </template>
+    </div>
+
+    <!-- ─── O'xshash retseptlar ─── -->
+    <div v-if="similarRecipes.length" class="similar-section">
+      <div class="similar-header">
+        <div class="similar-title-row">
+          <div class="similar-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="similar-title">O'xshash retseptlar</h2>
+            <p class="similar-sub">{{ lang.catName(recipe) }} kategoriyasidan</p>
+          </div>
+        </div>
+        <button
+          class="similar-all-btn"
+          @click="router.push({ name: 'Recipes', query: { category: recipe.categoryId } })"
+        >
+          Hammasini ko'rish
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="similar-scroll">
+        <div class="similar-track">
+          <div
+            v-for="r in similarRecipes" :key="r.id"
+            class="similar-card"
+            @click="router.push({ name: 'RecipeDetail', params: { id: r.id } })"
+          >
+            <div class="sc-img-wrap">
+              <img
+                v-if="r.imageUrl"
+                :src="resolveImageUrl(r.imageUrl)"
+                :alt="lang.recipeTitle(r)"
+                class="sc-img"
+              />
+              <div v-else class="sc-img-placeholder">🍽️</div>
+              <div class="sc-gradient" />
+              <span v-if="r.difficultyLevel" class="sc-diff-badge" :class="`sc-diff--${r.difficultyLevel?.toLowerCase()}`">
+                {{ diffMap[r.difficultyLevel]?.label }}
+              </span>
+            </div>
+            <div class="sc-body">
+              <p class="sc-title">{{ lang.recipeTitle(r) }}</p>
+              <div class="sc-meta">
+                <span v-if="r.prepTimeMinutes || r.cookTimeMinutes" class="sc-meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>
+                  </svg>
+                  {{ (r.prepTimeMinutes || 0) + (r.cookTimeMinutes || 0) }} {{ lang.t('common.min') }}
+                </span>
+                <span v-if="r.averageRating > 0" class="sc-meta-item sc-rating">
+                  ★ {{ r.averageRating.toFixed(1) }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1175,5 +1281,162 @@ onMounted(async () => {
   .tab-btn   { padding: 10px 6px; }
   .tab-icon  { width: 18px; height: 18px; }
   .tab-badge { position: absolute; top: 4px; right: 4px; }
+}
+
+/* ── Kategoriya badge click ── */
+.hero-badge--clickable {
+  cursor: pointer;
+  transition: background 0.18s, transform 0.15s;
+}
+.hero-badge--clickable:hover {
+  background: rgba(216,90,48,0.75) !important;
+  transform: translateY(-1px);
+}
+
+/* ── O'xshash retseptlar ── */
+.similar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--bd);
+  border-radius: 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.similar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.similar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.similar-icon {
+  width: 38px; height: 38px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(216,90,48,0.15), rgba(232,113,62,0.22));
+  border: 1px solid rgba(216,90,48,0.2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.similar-icon svg { width: 18px; height: 18px; color: #E8713E; }
+.similar-title {
+  font-size: 16px; font-weight: 900; color: var(--tx-1); margin: 0;
+  letter-spacing: -0.2px;
+}
+.similar-sub {
+  font-size: 11px; font-weight: 600; color: var(--tx-5); margin: 2px 0 0;
+}
+.similar-all-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 14px; border-radius: 20px;
+  border: 1.5px solid rgba(216,90,48,0.25);
+  background: rgba(216,90,48,0.06);
+  color: #E8713E; font-size: 12px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: all 0.18s;
+  flex-shrink: 0;
+}
+.similar-all-btn svg { width: 12px; height: 12px; }
+.similar-all-btn:hover {
+  background: rgba(216,90,48,0.14);
+  border-color: rgba(216,90,48,0.45);
+  transform: translateX(2px);
+}
+
+/* Horizontal scroll container */
+.similar-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -20px;
+  padding: 4px 20px 6px;
+}
+.similar-scroll::-webkit-scrollbar { display: none; }
+
+.similar-track {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+}
+
+/* Individual card */
+.similar-card {
+  width: 180px;
+  flex-shrink: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg-card-md);
+  border: 1.5px solid var(--bd);
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.similar-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(216,90,48,0.35);
+  box-shadow: 0 8px 24px rgba(216,90,48,0.14);
+}
+
+.sc-img-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+}
+.sc-img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform 0.35s ease;
+}
+.similar-card:hover .sc-img { transform: scale(1.06); }
+.sc-img-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; background: var(--bg-card-md);
+  opacity: 0.35;
+}
+.sc-gradient {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 55%);
+}
+.sc-diff-badge {
+  position: absolute; bottom: 7px; left: 8px;
+  padding: 3px 8px; border-radius: 20px;
+  font-size: 10px; font-weight: 800;
+  backdrop-filter: blur(6px);
+}
+.sc-diff--easy   { background: rgba(16,185,129,0.82); color: #fff; }
+.sc-diff--medium { background: rgba(234,179,8,0.82);  color: #fff; }
+.sc-diff--hard   { background: rgba(239,68,68,0.82);  color: #fff; }
+.sc-diff--expert { background: rgba(139,92,246,0.82); color: #fff; }
+
+.sc-body {
+  padding: 10px 11px 12px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sc-title {
+  font-size: 13px; font-weight: 800; color: var(--tx-2);
+  line-height: 1.3; margin: 0;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+.sc-meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.sc-meta-item {
+  display: flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600; color: var(--tx-5);
+}
+.sc-meta-item svg { width: 11px; height: 11px; }
+.sc-rating { color: #f59e0b; font-weight: 800; }
+
+@media (max-width: 600px) {
+  .similar-section { padding: 16px 14px 18px; border-radius: 20px; }
+  .similar-scroll   { margin: 0 -14px; padding: 4px 14px 4px; }
+  .similar-card     { width: 155px; }
+  .similar-title    { font-size: 14px; }
 }
 </style>
